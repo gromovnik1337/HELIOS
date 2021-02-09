@@ -1,0 +1,205 @@
+Linux Ubuntu 18.04
+
+First, Anaconda3 was installed. Donwloaded from: https://www.anaconda.com/products/individual#linux
+Installation instructions: https://docs.anaconda.com/anaconda/install/linux/
+
+Next, one needs to install TF Directory and Anaconda Virtual Environment. The TensorFlow Object Detection API requires 
+using the specific directory structure provided in its GitHub repository. It also requires several additional Python 
+packages, specific additions to the PATH andPYTHONPATH variables, and a few extra setup commands to get everything set 
+up to run or train an object detection model.
+
+Create a "tensorflow1" directory in the Home folder. Download this exact commit: https://github.com/tensorflow/models/tree/079d67d9a0b3407e8d074a200780f3835413ef99 and extract it inside.
+Rename the main folder to "models"
+
+Next, download the SSD-MobileNet-V2-Quantized-COCO model: http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_quantized_300x300_coco_2019_01_03.tar.gz
+Unzip it in: repo into the ~/tensorflow1/models/research/object_detection
+You should get the folder like: ssd_mobilenet_v2_quantized_300x300_coco_2019_01_03
+N.B. TensorFlow Lite does not support RCNN models such as Faster-RCNN, it only supports SSD models!
+
+Then, DOWNLOAD (not clone!) https://github.com/EdjeElectronics/TensorFlow-Object-Detection-API-Tutorial-Train-Multiple-Objects-Windows-10.git repo and extract its CONTENTS
+to  ~/tensorflow1/models/research/object_detection. Overwrite old README files. 
+
+Installing CUDA toolkit
+
+wget https://developer.download.nvidia.com/compute/cuda/10.1/Prod/local_installers/cuda_10.1.243_418.87.00_linux.run
+
+Do not install driver!
+
+sudo sh cuda_10.1.243_418.87.00_linux.run
+
+
+cuDNN
+
+tar
+
+manual copy
+luxc@luxc-Precision-7540:~/Downloads/cuda/include$ sudo cp cudnn*.h /usr/local/cuda/include 
+luxc@luxc-Precision-7540:~/Downloads/cuda/include$ sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
+luxc@luxc-Precision-7540:~/Downloads/cuda/lib64$ sudo cp -P libcudnn* /usr/local/cuda/lib64
+
+
+# CUDA related exports
+export PATH=/usr/local/cuda-10.1/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+Download latest protobuff: https://github.com/protocolbuffers/protobuf/releases
+Unzip into the folder of choice, and append .bashrc like this: export PATH="/home/luxc/tensorflow1/protoc-3.14.0-linux-x86_64:$PATH"
+
+Open a new terminal
+cd into TensorFlow/models/research/ 
+Then: protoc object_detection/protos/*.proto --python_out=.
+
+
+
+Delete:
+
+All files in \object_detection\images\train and \object_detection\images\test
+The “test_labels.csv” and “train_labels.csv” files in \object_detection\images
+All files in \object_detection\training
+All files in \object_detection\inference_graph
+
+This establishes a basic working framework.
+
+Next, create a virtual anaconda environment with: conda create -n tensorflow1 pip python=3.8
+Be careful that you create a virtual environment for the latest version of python!
+
+To activate the environment: conda activate tensorflow1
+To deactivate the environment: conda deactivate
+
+# From within TensorFlow/models/research/
+cp object_detection/packages/tf2/setup.py .
+python -m pip install .
+
+# From within TensorFlow/models/research/
+python object_detection/builders/model_builder_tf2_test.py
+
+This step maybe needs to go more down, beacuse when I did the steps below the teast didn't worked until I repeated this one!
+
+Activate it.
+Do this: python -m pip install --upgrade pip
+Install tensorflow-gpu with: pip install --ignore-installed --upgrade tensorflow-gpu
+
+No GPU
+pip install --ignore-installed --upgrade tensorflow
+
+Since we're using Anaconda, installing tensorflow-gpu will also automatically download 
+and install the correct versions of CUDA and cuDNN.
+(Note: You can also use the CPU-only version of TensorFow, but it will run much slower. 
+If you want to use the CPU-only version, just use "tensorflow" instead of "tensorflow-gpu" in the previous command.)
+
+Next, install the dependecies:
+
+conda install -c anaconda protobuf
+pip install pillow
+pip install lxml
+pip install Cython
+pip install contextlib2
+pip install jupyter
+pip install matplotlib
+pip install pandas
+pip install opencv-python
+
+Configure PYTHONPATH environmental variable, to point towads relevant directories with:
+
+set PYTHONPATH=/home/luxc/tensorflow1/models/
+set PYTHONPATH=/tensorflow1/models/research
+set PYTHONPATH=/tensorflow1/models/research/slim
+
+cd into models/research/ and compile Protobufs with:
+
+protoc object_detection/protos/*.proto --python_out=.
+
+cd into models/research/
+
+python setup.py build
+python setup.py install
+
+Now test that the API is woroking properly. In the folder models/research/object_detection do:
+jupyter notebook object_detection_tutorial.ipynb 
+
+Run the script until the end. Pictures of dog should appear. If not, go to the folder ~/tensorflow1/models/research/object_detection/utils, findt the 
+and find the object_detection/utils/visualization_utils.py and comment out the import statements around lines 29 and 30 that include matplotlib. Then re-run the Jupyter Notebook.
+
+Next, label the images, and split them and their adjecent xml files in the images/train and images/test directories. 
+From the main model directory, in this case, tensorflow1/models/research/object_detection
+run: python xml_to_csv.py
+Open generate_tfrecord.py and replace the label map that starts with the line 31 with the one used for this training data set, in this case, 
+of only one object detection it looks like:
+
+def class_text_to_int(row_label):
+    if row_label == 'Object':
+        return 1
+    else:
+        None
+
+Additional case, deck of cards recognition:
+
+def class_text_to_int(row_label):
+    if row_label == 'nine':
+        return 1
+    elif row_label == 'ten':
+        return 2
+    elif row_label == 'jack':
+        return 3
+    elif row_label == 'queen':
+        return 4
+    elif row_label == 'king':
+        return 5
+    elif row_label == 'ace':
+        return 6
+    else:
+        None
+
+
+Create record files:
+python generate_tfrecord.py --csv_input=images/train_labels.csv --image_dir=images/train --output_path=train.record
+python generate_tfrecord.py --csv_input=images/test_labels.csv --image_dir=images/test --output_path=test.record
+
+These generate a train.record and a test.record file in \object_detection. These will be used to train the new object detection classifier.
+
+Last steps before training are creation of the label map and editing the config file.
+Create labelmap.pbtxt in the object_detection/training folder, or edit the existing one
+to match the label map in generate_tfrecord.py
+
+item {
+  id: 1
+  name: 'Object'
+}
+
+Next is to configure training. 
+Download "ssd_mobilenet_v2_quantized_300x300_coco.config" from the last commit of the 
+TensorFlow repo: https://github.com/tensorflow/models/tree/master/research/object_detection/samples/configs
+Move it to the object_detection/training and opet it in editor.
+Make the following changes to the ssd_mobilenet_v2_quantized_300x300_coco.config file. Note: The paths must be 
+entered with single forward slashes (NOT backslashes), or TensorFlow will give a file path error when trying to train 
+the model! Also, the paths must be in double quotation marks ( " ), not single quotation marks ( ' ).
+
+Line 9. Change num_classes to the number of different objects you want the classifier to detect. 
+
+Line 141. Change batch_size: 24 to batch_size: 6 . The smaller batch size will prevent OOM (Out of Memory) errors during training.
+
+Line 156. Change fine_tune_checkpoint to: "/home/luxc/tensorflow1/models/research/object_detection/ssd_mobilenet_v2_quantized_300x300_coco_2019_01_03/model.ckpt"
+
+Line 175. Change input_path to: "/home/luxc/tensorflow1/models/research/object_detection/train.record"
+
+Line 177. Change label_map_path to: "/home/luxc/tensorflow1/models/research/object_detection/training/labelmap.pbtxt"
+
+Line 181. Change num_examples to the number of images you have in the /images/test directory. 
+
+Line 189. Change input_path to: "/home/luxc/tensorflow1/models/research/object_detection/test.record"
+
+Line 191. Change label_map_path to: "/home/luxc/tensorflow1/models/research/object_detection/training/labelmap.pbtxt"
+
+UPDATE 9/26/18: As of version 1.9, TensorFlow has deprecated the "train.py" file and replaced it with "model_main.py" file. 
+I haven't been able to get model_main.py to work correctly yet (I run in to errors related to pycocotools). 
+Fortunately, the train.py file is still available in the /object_detection/legacy folder. Simply move train.py from 
+/object_detection/legacy into the /object_detection folder and then continue following the steps below.
+
+export PYTHONPATH=$PYTHONPATH:/home/luxc/tensorflow1:/home/luxc/tensorflow1/models/
+export PYTHONPATH=$PYTHONPATH:/home/luxc/tensorflow1:/home/luxc/tensorflow1/models/research
+export PYTHONPATH=$PYTHONPATH:/home/luxc/tensorflow1:/home/luxc/tensorflow1/models/research/slim
+export PYTHONPATH=$PYTHONPATH:/home/luxc/tensorflow1:/home/luxc/tensorflow1/models/research/object_detection
+
+sudo python3 train.py --logtostderr –train_dir=training/ --pipeline_config_path=training/ssd_mobilenet_v2_quantized_300x300_coco.config
+sudo python3 models/research/object_detection/model_main.py     --pipeline_config_path=training/ssd_mobilenet_v2_quantized_300x300_coco.config     --model_dir=training     --num_train_steps=50000     --sample_1_of_n_eval_examples=1     --alsologtostderr
+sudo python3 model_main_tf2.py --model_dir=training --pipeline_config_path=training/ssd_mobilenet_v2_quantized_300x300_coco.config

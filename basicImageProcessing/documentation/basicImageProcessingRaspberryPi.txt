@@ -1,0 +1,92 @@
+Each pixel has RGB LED - which has intensity.
+
+Enable the camera in raspi-config. Test it with:
+"raspistill -o test.jpg"
+and/or
+"raspivid -o video.h264 -t 10000"
+
+Verify that pip is installed: sudo apt install python3-pip
+
+Do: sudo apt update && sudo apt full-upgrade -y
+
+Install OpenCV & dependencies:
+
+sudo apt install libatlas-base-dev -y
+sudo apt install libjasper-dev -y
+sudo apt install libqtgui4 -y
+sudo apt install python3-pyqt5 -y
+sudo apt install libqt4-test -y
+sudo apt install libhdf5-dev libhdf5-serial-dev -y
+sudo pip3 install opencv-contrib-python==4.1.0.25
+
+
+Then do: sudo apt install python3-opencv
+
+
+Install picamera  Python module: pip3 install picamera[array]
+This module (among other stuff) caputures the image in the matrices so we can process it.
+
+Test is OpenCV working with this script:
+
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+import time
+import cv2
+ 
+camera = PiCamera()
+camera.resolution = (640, 480)
+imageCapture = PiRGBArray(camera, size = (640,480))
+ 
+time.sleep(0.2)
+ 
+camera.capture(imageCapture, format="bgr")
+image = imageCapture.array
+ 
+cv2.imshow("Captured Image", image)
+cv2.waitKey(0)
+
+
+Image array looks has the format [X, Y, C].
+X and Y are pixel coordinates
+C is the channel (RGB)
+OpenCV stores image in "bgr" format, meaning C = 0 is blue, C = 1 is green and C = 2 is red.
+So, for example, [255, 255, 0] = 122 would be a pixel at (255, 255) coordinate that has 
+122 intensity of the green LED.
+
+Test it with:
+
+from picamera.array import PiRGBArray
+from picamera import PiCamera
+import time
+import cv2
+ 
+camera = PiCamera()
+camera.resolution = (640, 480)
+imageCapture = PiRGBArray(camera, size = (640,480))
+ 
+time.sleep(0.2)
+ 
+camera.capture(imageCapture, format="bgr")
+image = imageCapture.array
+ 
+b = image.copy()
+# set green and red channels to 0
+b[:, :, 1] = 0
+b[:, :, 2] = 0
+
+g = image.copy()
+# set blue and red channels to 0
+g[:, :, 0] = 0
+g[:, :, 2] = 0
+
+r = image.copy()
+# set blue and green channels to 0
+r[:, :, 0] = 0
+r[:, :, 1] = 0
+	
+cv2.imshow("Captured Image", image)
+cv2.imshow("Blue Component", b)
+cv2.imshow("Green Component", g)
+cv2.imshow("Red Component", r)
+
+cv2.waitKey(0)

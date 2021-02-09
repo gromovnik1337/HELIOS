@@ -1,0 +1,15 @@
+First, labelImg software was installed using:
+
+pip3 install labelImg
+
+Its installation folder was added to PATH, so it can be executed from terminal. To do it permamently,
+and not only for the current terminal session, ~/.bashrc file was edited, which is a startup file for default shell.
+
+sudo nano .bashrc
+
+add this at the end of the file:
+
+PATH="/home/luxc/.local/bin:$PATH"
+
+Run the software with: labelImg
+
