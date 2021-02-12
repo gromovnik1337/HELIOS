@@ -1,0 +1,26 @@
+<annotation>
+	<folder>defDetTrainData</folder>
+	<filename>2021-01-30_184432.jpg</filename>
+	<path>/media/luxc/Seagate Expansion Drive/Vice/02. Projects/THEIA/Data/defDetTrainData/2021-01-30_184432.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>2592</width>
+		<height>1944</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>Object</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>560</xmin>
+			<ymin>421</ymin>
+			<xmax>1820</xmax>
+			<ymax>1937</ymax>
+		</bndbox>
+	</object>
+</annotation>
