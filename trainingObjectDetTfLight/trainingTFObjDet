@@ -84,8 +84,9 @@ https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc
 
 Following the instructions, one must now organize the folders. Inside the object_detection/models folder, create a directory with the 
 name of the desired model, in this case HELIOS_1. 
-Inside the directory, copy the .config file from object_detection/samples, or one that was downloaded with the checkpoint values:
+Inside the directory, copy the folders that were downloaded with the checkpoint values, from the:
 https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md
+Leave the exact strcuture of the downloaded model!!!
 
 Place the contents inside the HELIOS_1
 
@@ -97,7 +98,7 @@ num_classes: 1
 train_config {
   batch_size: 6
 
- fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/ckpt-0"
+ fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/checkpoint/ckpt-0"
 
 eval_input_reader {
   label_map_path: "/home/theia/_data/tfModels/models/research/object_detection/data/labelmap.pbtxt"

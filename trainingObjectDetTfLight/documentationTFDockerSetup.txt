@@ -186,7 +186,7 @@ docker run -it --rm \
        -v /tmp/.X11-unix:/tmp/.X11-unix \
        -v /var/lib/docker/volumes/theia:/home/theia \
        -w /home/theia \
-       tensorflow/tensorflow
+       image_name
 
 Due to the fact that training a model on the gpu version resulted in a very-hard to debug GPU related error,
 a separate image was created using only CPU version of tensorflow. Only object_detection installation (see instructions above)
