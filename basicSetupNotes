@@ -1,0 +1,9 @@
+These notes will document basic Ubuntu 18.04 PC setup for working in the THEIA project.
+First, install Anaconda. After you've installed Anaconda, it is added to /.bashrc as a PATH and it is used as a main Python interpreter.
+Therefore, all the Python modules should be aimed to be installed using "conda install" tool in the CLI, to avoid having to manually edit
+the PYTHONPATH environmental variable.
+
+conda install -c anaconda pyqt
+conda install -c pytorch pytorch
+conda install -c conda-forge opencv
+conda install -c conda-forge keras

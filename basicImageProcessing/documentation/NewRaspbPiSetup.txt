@@ -39,11 +39,12 @@ StartupNotify=false
 Use raspi-config to adjust the resolution (don't put the highest option).
 Disable wifi (not mandatory) so the LAN network is always prefferable (it will run faster).
 
-Static IP setup:
+IP setup:
 
 If the wifi is enabled on the Pi, there might some troubles when trying to connect to it using the ethernet cable and the 
 raspberrypi.local default hostname. Use: ping raspberrypi.local to show it's current IP adress, providing that it is connected via ethernet cable! 
-That IP can then be used to connect to it via SSH or VNC. Next steps describe setting up the static IP adress.
+That IP can then be used to connect to it via SSH or VNC. Next steps describe setting up the static IP adress. WARNING! If the router is set 
+to dynamic IP, this procedue will have to be repeated everytime its address has been changed!
 
 Run: ip -4 addr show | grep global
 
@@ -52,7 +53,7 @@ inet 10.1.1.30/24 brd 10.1.1.255 scope global eth0
 inet 10.1.1.31/24 brd 10.1.1.255 scope global wlan0
 
 The first address is the IP address of your Pi on the network, and the part after the slash is the network size. It is highly likely that yours will be a /24.
-The second address is the brd (broadcast) address of the network.
+The second address is the brd (broadcast) address of the network. wlan0 password can be used to connect to the RPi via VNC or SSH.
 
 Find the address of your router (or gateway):
 
