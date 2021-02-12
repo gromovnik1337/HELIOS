@@ -1,0 +1,29 @@
+Description of the QR, barcode and 2D barcode work, conducted on 10.02.2021
+3 scripts were created, all using the same name for the input image! So be careful, the script will fail 
+if the image does not contain the type of the code the script detects!
+
+QR codes are relatively simple to detect and decode as there is an QRCodeDetector class in the OpenCv.
+For the barcode detection, one must use pyzbar lirary.
+
+conda install -c conda-forge pyzbar
+
+Alternative installation, for RPi or for non-Anacodna framework:
+https://pypi.org/project/pyzbar/
+
+N.B. Be sure to use pip3 install!
+
+Finally, for 2D barcode detection, pylibdmtx was used
+
+conda install -c conda-forge pylibdmtx
+
+Alternative installation, for RPi or for non-Anacodna framework:
+https://pypi.org/project/pylibdmtx/
+
+Be sure to do:
+pip3 install pylibdmtx
+sudo apt-get install libdmtx0a
+
+N.B. last command might need to be replaced with (letter b in the end):
+
+sudo apt-get install libdmtx0b
+
