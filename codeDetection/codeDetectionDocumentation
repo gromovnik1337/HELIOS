@@ -19,7 +19,9 @@ conda install -c conda-forge pylibdmtx
 Alternative installation, for RPi or for non-Anacodna framework:
 https://pypi.org/project/pylibdmtx/
 
-Be sure to do:
+Probable error: ImportError: Unable to find dmtx shared library
+Then:
+
 pip3 install pylibdmtx
 sudo apt-get install libdmtx0a
 
