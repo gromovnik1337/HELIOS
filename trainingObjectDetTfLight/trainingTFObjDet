@@ -84,9 +84,10 @@ https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc
 
 Following the instructions, one must now organize the folders. Inside the object_detection/models folder, create a directory with the 
 name of the desired model, in this case HELIOS_1. 
-Inside the directory, copy the folders that were downloaded with the checkpoint values, from the:
+Inside the directory, copy the folders that were downloaded from the pre-trained list of models, from the:
 https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md
-Leave the exact strcuture of the downloaded model!!!
+These are pretty useful to initialize training on novel data sets.
+Leave the exact folder strcuture of the downloaded model!!!
 
 Place the contents inside the HELIOS_1
 
@@ -134,5 +135,100 @@ python object_detection/model_main_tf2.py \
     --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
     --model_dir=${MODEL_DIR} \
     --alsologtostderr
+
+
+
+
+Last thing that was done to mitigate the GPU error:
+
+
+Added the code below to the
+/root/anaconda3/lib/python3.8/site-packages/object_detection/models/ssd_mobilenet_v1_fpn_keras_feature_extractor.py
+in the containter.
+
+It looks like this is the model it calls....
+
+
+# Included to mitigate issue: Could not create cudnn handle: CUDNN_STATUS_INTERNAL_ERROR
+# Vice: 13.02.2021
+
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+config = ConfigProto()
+config.gpu_options.allow_growth = True
+session = InteractiveSession(config=config)
+
+#################################
+
+
+Also, I've reduced the batch size to 1, but received again OOM error
+
+
+To see all the processes that are using GPU:
+sudo fuser -v /dev/nvidia*
+
+To check GPU memommry usage:
+nvidia-smi
+
+To flush memmory
+nvidia-smi --gpu-reset
+
+
+Relevant model python scripts in the docker image without anaconda:
+
+/usr/local/lib/python3.6/dist-packages/object_detection/models/ssd_mobilenet_v1_fpn_keras_feature_extractor.py
+
+
+Training completed! It was done using SSD Mobile Net ssd_mobilenet_v1_fpn_640x640_coco17_tpu-8 model whith limiting GPU usage:
+
+# Included to mitigate issue: OOM NVDIA
+# Vice: 13.02.2021
+
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+#################################
+
+
+Other possible solutions (https://starriet.medium.com/tensorflow-2-0-wanna-limit-gpu-memory-10ad474e2528):
+
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+  try:
+    for gpu in gpus:
+      tf.config.experimental.set_memory_growth(gpu, True)
+  except RuntimeError as e:
+    print(e)
+
+
+
+
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+  try:
+    tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)])
+  except RuntimeError as e:
+    print(e)
+
+
+For TF 1.x
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+
+
+# change the memory fraction as you want...
+import tensorflow as tf
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+
+
+
+
 
 

@@ -6,6 +6,8 @@ This entry is a re-written reconstruction of the 07.02.2021 entry on the next da
 As the file was on removable HDD, whole HDD was scanned and repaired using the Windows 10 tool. Corrupted file disappeared afterwards.
 It will describe how to setup and use a TF docker container, on a Linux Ubuntu 18.04. machine.
 
+Startin point: https://www.tensorflow.org/install/docker
+
 First, install docker on the local host machine: https://docs.docker.com/get-docker/
 To check the information about the docker account: docker info
 Then, install NVDIA-Toolkit: https://github.com/NVIDIA/nvidia-docker, following further steps. Before starting,
@@ -29,6 +31,18 @@ Install nvdia-docker 2:
 
 sudo apt-get update
 sudo apt-get install -y nvidia-docker2
+
+Possible issues with nvidia 450 driver:
+dpkg: error processing archive /var/cache/apt/archives/libnvidia-common-450_450.80.02-0ubuntu0.18.04.2_all.deb
+(--unpack):
+ trying to overwrite '/usr/share/nvidia/nvidia-application-profiles-450.80.02-key-documentation',
+ which is also in package libnvidia-common-450-server  450.80.02-0ubuntu0.18.04.3
+
+Solved with: 
+
+sudo apt-get -o Dpkg::Options::="--force-overwrite" install -f libnvidia-common-450-server
+
+
 sudo systemctl restart docker
 
 Test the working setup:
@@ -62,6 +76,8 @@ docker rm $(docker container ls -aq)
 
 To check is GPU available, look for it in VGA compatible section of the output from:
 lspci
+or do: lspci | grep -i NViDIA
+or: lspci | grep -i nvidia
 
 
 Now, to create a customized docker image. First, volumes in the docker container will be briefly addressed:
@@ -97,6 +113,9 @@ Next, several dependencies will be installed inside the docker TF container and 
 can be used as a working framework.
 N.B. One must start the docker container with root permissions! Furthemore, mounting the volume needs to be done on every startup of the contanier
 as it is no "burned" in the image, to corresponds to the volumes independent structure.
+
+install nano:
+apt install nano
 
 First, Anaconda package was installed (https://docs.anaconda.com/anaconda/install/linux/) by downloading the recquired file, moving it to the volume
 and then first verifying the installation with:
@@ -198,9 +217,24 @@ unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
 unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
 rm -f $PROTOC_ZIP
 
-Runtime error, when tried to train the model for the first time was resolved with 
+Import error, when tried to train the model for the first time
+ImportError: libGL.so.1: cannot open shared object file: No such file or directory
+
+Solution:
+
 apt update
 apt install libgl1-mesa-glx
+
+
+
+13.02.2021
+
+Reverted the drivers to the version 450 and CUDA version 11.0.
+Made a whole new docker image, without Anaconda.
+
+nano was installed, protoc buffers were compiled, libgl1 library error resolved.
+
+Image saved as helios_0.1.3
 
 
 
