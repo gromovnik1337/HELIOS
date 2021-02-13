@@ -98,7 +98,7 @@ num_classes: 1
 train_config {
   batch_size: 6
 
- fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/checkpoint/ckpt-0"
+ fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/folder_name/ckpt-0"
 
 eval_input_reader {
   label_map_path: "/home/theia/_data/tfModels/models/research/object_detection/data/labelmap.pbtxt"
@@ -236,23 +236,45 @@ fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detecti
 
 
 
-
-
 Evaluate the training job
 
 # From the tensorflow/models/research/ directory
-PIPELINE_CONFIG_PATH=object_detection/models/HELIOS_1/pipeline.config
+PIPELINE_CONFIG_PATH=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/pipeline.config
 
-MODEL_DIR=object_detection/models/HELIOS_1
+MODEL_DIR=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1
 
-CHECKPOINT_DIR=object_detection/models/HELIOS_1/checkpoint
-MODEL_DIR=object_detection/models/HELIOS_1
+CHECKPOINT_DIR=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1
 
 python object_detection/model_main_tf2.py \
     --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
     --model_dir=${MODEL_DIR} \
     --checkpoint_dir=${CHECKPOINT_DIR} \
     --alsologtostderr
+
+
+Converting to TFLite:
+
+This step generates an intermediate SavedModel that can be used with the TFLite Converter via commandline or Python API.
+
+# From the tensorflow/models/research/ directory
+python object_detection/export_tflite_graph_tf2.py \
+    --pipeline_config_path /home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/pipeline.config \
+    --trained_checkpoint_dir /home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1 \
+    --output_directory /home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/TFLite
+
+
+Next, run the CLI converter. Beware that you give the path to the DIRECTORY of the saved model and the full path to
+the output model, meaning also the name_of_the_output.tflite
+
+
+tflite_convert \
+  --saved_model_dir=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/TFLite/saved_model \
+  --output_file=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/helios_1.tflite
+
+  Finally, create a TFlite label map, which is just a text file with the names of the classes, listed using their IDs.
+  In this case, only one word, "Object"
+
+
 
 
 

@@ -226,7 +226,6 @@ apt update
 apt install libgl1-mesa-glx
 
 
-
 13.02.2021
 
 Reverted the drivers to the version 450 and CUDA version 11.0.

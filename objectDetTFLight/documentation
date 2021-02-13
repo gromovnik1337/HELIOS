@@ -10,15 +10,20 @@ not to mess up current model.
 
 sudo pip3 install virtualenv
 python3.7 -m venv TFLite-venv
-bash get_py_requirements.sh
+
 
 Every time, if the terminal session has ended, virtual environment needs to be started by moving to the directory 
 which has been used for the installation (in this case: ~/THEIA/objectDetTFLight/tflite1) and issuing a command: source TFLite-venv/bin/activate
 This is a working environment that will be used for the rest of the document.
 There is a nice bash script in the repo called get_pi_requirements.sh that also has a good if clause which
-uses different installer depending on the version of the dependency it finds. Run it: bash  get_pi_requirements.sh
+uses different installer depending on the version of the dependency it finds. 
+
+Run it: sudo bash  get_pi_requirements.sh
+It installs all the dependecies inside the environment.
+
 After that, there are two options: use a sample, already trained model or train and use your own. Each model is stored in a folder
 that has detect file (which stores the model) and the label map file (storing the labels).
+Model needs to be named detect.tflite and label map must be labelmap.txt
 First, google's sample model has been tested:
 
 wget https://storage.googleapis.com/download.tensorflow.org/models/tflite/coco_ssd_mobilenet_v1_1.0_quant_2018_06_29.zip
@@ -37,3 +42,6 @@ python3 TFLite_detection_image.py --modeldir="input the model folder here" --ima
 python3 TFLite_detection_webcam.py --modeldir=Sample_TFLite_model
 
 To speed up the detection, one can also use Coral USB Accelerator, whose use has also been documented.
+
+
+python3 TFLite_detection_image.py --modeldir=helios1 --imagedir=pictures
