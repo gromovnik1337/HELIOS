@@ -87,7 +87,6 @@ name of the desired model, in this case HELIOS_1.
 Inside the directory, copy the folders that were downloaded from the pre-trained list of models, from the:
 https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/tf2_detection_zoo.md
 These are pretty useful to initialize training on novel data sets.
-Leave the exact folder strcuture of the downloaded model!!!
 
 Place the contents inside the HELIOS_1
 
@@ -127,9 +126,9 @@ Inside the object_detection/data folder, copy the created train and test .record
 
 # From the tensorflow/models/research/ directory
 
-PIPELINE_CONFIG_PATH=object_detection/models/HELIOS_1/pipeline.config
+PIPELINE_CONFIG_PATH=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/pipeline.config
 
-MODEL_DIR=PIPELINE_CONFIG_PATH=object_detection/models/HELIOS_1
+MODEL_DIR=/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1
 
 python object_detection/model_main_tf2.py \
     --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
@@ -185,7 +184,7 @@ Training completed! It was done using SSD Mobile Net ssd_mobilenet_v1_fpn_640x64
 # Included to mitigate issue: OOM NVDIA
 # Vice: 13.02.2021
 
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 
 #################################
@@ -225,6 +224,37 @@ sess = tf.Session(config=config)
 import tensorflow as tf
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
+
+First training did not produced any results, no checkpoint values to export the inference graphs were created. The reasons were:
+- faulty pipeline config path, which was corrected.
+- checkpoints that are predetermined, fine tune checkoints, need to be in a folder inside the model that is not called "checkpoint" as 
+tf will create a new file, also called checkpoint during it's training and it will be confused because it will have both the file to write new
+values into and a directory under the same name. A folder called "hehehe" was created for the fine tuning checkpoints, and the config file was corrected as follows:
+
+fine_tune_checkpoint: "/home/theia/_data/tfModels/models/research/object_detection/models/HELIOS_1/hehehe/ckpt-0"
+
+
+
+
+
+Evaluate the training job
+
+# From the tensorflow/models/research/ directory
+PIPELINE_CONFIG_PATH=object_detection/models/HELIOS_1/pipeline.config
+
+MODEL_DIR=object_detection/models/HELIOS_1
+
+CHECKPOINT_DIR=object_detection/models/HELIOS_1/checkpoint
+MODEL_DIR=object_detection/models/HELIOS_1
+
+python object_detection/model_main_tf2.py \
+    --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
+    --model_dir=${MODEL_DIR} \
+    --checkpoint_dir=${CHECKPOINT_DIR} \
+    --alsologtostderr
+
+
 
 
 
