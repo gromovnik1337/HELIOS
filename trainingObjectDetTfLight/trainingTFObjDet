@@ -174,12 +174,13 @@ To flush memmory
 nvidia-smi --gpu-reset
 
 
-Relevant model python scripts in the docker image without anaconda:
-
-/usr/local/lib/python3.6/dist-packages/object_detection/models/ssd_mobilenet_v1_fpn_keras_feature_extractor.py
 
 
 Training completed! It was done using SSD Mobile Net ssd_mobilenet_v1_fpn_640x640_coco17_tpu-8 model whith limiting GPU usage:
+This script is to be edited!
+
+Relevant model python scripts in the docker image without anaconda:
+
 
 # Included to mitigate issue: OOM NVDIA
 # Vice: 13.02.2021
@@ -274,6 +275,18 @@ tflite_convert \
   Finally, create a TFlite label map, which is just a text file with the names of the classes, listed using their IDs.
   In this case, only one word, "Object"
 
+
+
+20.02.2021.
+Model has been re-trained, this time with a batch size of 6 and 10 times more steps (25000). 
+Resulting model performed pretty much the same as the one before.
+
+Next, a loading, quantization optimization and exporting script using Python API has been created to be utiled for post processing
+the model (to reduce it's size) while converting it to TFlite. The script is named modelLoadOptExpt.py and is placed in Tools folder in the repo.
+To utilize the script properly, one must run it from the inside of the TF docker container. Script has to be placed in the same folder
+where the intermediate SavedModel has been created using the CLI tool described in the step above. Now, CLI converter to TFlite does not need to be used anymore.
+Size of the model reduced from 119 to 32 MB which is stil quite high, but considerably better.
+Longer training incresed the accuracy.
 
 
 
