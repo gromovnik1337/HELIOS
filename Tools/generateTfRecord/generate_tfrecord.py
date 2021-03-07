@@ -33,7 +33,7 @@ FLAGS = flags.FLAGS
 
 # TO-DO replace this with label map
 def class_text_to_int(row_label):
-    if row_label == 'Object':
+    if row_label == 'CONAN':
         return 1
     else:
         None

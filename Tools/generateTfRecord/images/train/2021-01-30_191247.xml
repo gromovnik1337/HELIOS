@@ -1,0 +1,26 @@
+<annotation>
+	<folder>pushupsPicPos1</folder>
+	<filename>2021-01-30_191247.jpg</filename>
+	<path>/media/luxc/Seagate Expansion Drive/Vice/02. Projects/THEIA/02. Data/01. Data_sets/pushups/pushupsPicPos1/2021-01-30_191247.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>2592</width>
+		<height>1944</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>CONAN</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>156</xmin>
+			<ymin>819</ymin>
+			<xmax>1798</xmax>
+			<ymax>1933</ymax>
+		</bndbox>
+	</object>
+</annotation>
