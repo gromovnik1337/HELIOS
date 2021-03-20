@@ -1,7 +1,1 @@
 
-[submodule "depthai-python"]
-	path = depthai-python
-	url = https://github.com/gromovnik1337/depthai-python.git
-[submodule "depthai"]
-	path = depthai
-	url = https://github.com/gromovnik1337/depthai.git
