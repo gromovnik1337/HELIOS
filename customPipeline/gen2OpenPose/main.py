@@ -201,6 +201,16 @@ with dai.Device(create_pipeline()) as device:
             return True, np.array(cam_out.get().getData()).reshape((3, 256, 456)).transpose(1, 2, 0).astype(np.uint8)
 
 
+    # Spewing out the keypoints output
+    # Vice 30.03.2021
+
+    # Brute force "save only first input" variables
+    z = 0
+    q = 0
+
+    detected_keypoints_file = open("detected_keypoints.txt", "a")
+    personwiseKeypoints_file = open("personwise_keypoints.txt", "a")    
+
     try:
         while should_run():
             read_correctly, frame = get_frame()
@@ -222,6 +232,15 @@ with dai.Device(create_pipeline()) as device:
                     for i in range(18):
                         for j in range(len(detected_keypoints[i])):
                             cv2.circle(debug_frame, detected_keypoints[i][j][0:2], 5, colors[i], -1, cv2.LINE_AA)
+
+                            # Output into a file
+                            if z == 0:
+                                detected_keypoints_file.write( str(detected_keypoints[i][j]) )
+                                detected_keypoints_file.write("\n")
+                                z = 1
+                            else:
+                                detected_keypoints_file.close()
+
                     for i in range(17):
                         for n in range(len(personwiseKeypoints)):
                             index = personwiseKeypoints[n][np.array(POSE_PAIRS[i])]
@@ -229,6 +248,20 @@ with dai.Device(create_pipeline()) as device:
                                 continue
                             B = np.int32(keypoints_list[index.astype(int), 0])
                             A = np.int32(keypoints_list[index.astype(int), 1])
+
+                            if q == 0:
+                                # Output into a file
+                                personwiseKeypoints_file.write( str (B[0]) )
+                                personwiseKeypoints_file.write(" ")
+                                personwiseKeypoints_file.write( str (A[0]) )
+                                personwiseKeypoints_file.write("\n")
+                                personwiseKeypoints_file.write( str (B[1]) )
+                                personwiseKeypoints_file.write(" ")
+                                personwiseKeypoints_file.write( str (A[1]) )
+                                q = 1
+                            else:
+                                personwiseKeypoints_file.close()
+
                             cv2.line(debug_frame, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
                 cv2.putText(debug_frame, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
                 cv2.putText(debug_frame, f"NN FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
