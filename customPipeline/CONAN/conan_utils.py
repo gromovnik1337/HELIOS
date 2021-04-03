@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 
 # Path of the deeplabv3 model
-nn_path_1 = "./deeplab_v3_plus_mvn2_decoder_256_openvino_2021.2_6shave.blob"
+nn_path_1 = "./models./deeplab_v3_plus_mvn2_decoder_256_openvino_2021.2_6shave.blob"
 # nn_path = "./deeplab_v3_plus_mvn2_decoder_513_openvino_2021.2_6shave.blob"
 # nn_path = "./deeplab_v3_plus_mvn3_decoder_256_openvino_2021.2_6shave.blob"
 
@@ -14,7 +14,7 @@ if '513' in nn_path_1:
 
 # Path of the OpenPose model
 
-nn_path_2 = "./human-pose-estimation-0001_openvino_2021.2_6shave.blob"
+nn_path_2 = "./models./human-pose-estimation-0001_openvino_2021.2_6shave.blob"
 
 nn_shape_2_x = 456
 nn_shape_2_y = 256

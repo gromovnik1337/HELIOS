@@ -3,7 +3,7 @@
 import numpy as np
 import cv2
 
-nn_path = "./deeplab_v3_plus_mvn2_decoder_256_openvino_2021.2_6shave.blob"
+nn_path = "./models/deeplab_v3_plus_mvn2_decoder_256_openvino_2021.2_6shave.blob"
 # nn_path = "./deeplab_v3_plus_mvn2_decoder_513_openvino_2021.2_6shave.blob"
 # nn_path = "./deeplab_v3_plus_mvn3_decoder_256_openvino_2021.2_6shave.blob"
 
