@@ -95,6 +95,10 @@ with dai.Device(create_pipeline()) as device:
     print("Starting pipeline...")
     device.startPipeline()
 
+# TODO Pipeline starts successfully, code below is to test can human segmentation be run using it
+# It can't, frame shape mistmatch
+
+"""
     # Host side queues, parameters must correspond those from the pipeline inputs 
     q_rgb = device.getOutputQueue(name = "rgb_stream_1", maxSize = 4, blocking = False)
     q_nn = device.getOutputQueue(name = "nn_1", maxSize = 4, blocking = False)
@@ -164,4 +168,4 @@ with dai.Device(create_pipeline()) as device:
         if cv2.waitKey(1) == ord('q'):
             break
 
-   
+"""
