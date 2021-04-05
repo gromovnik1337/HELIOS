@@ -15,12 +15,12 @@ def create_pipeline():
     # Copy pasted from human segmentation file, reason unknown :)
     pipeline.setOpenVINOVersion(version = dai.OpenVINO.Version.VERSION_2021_2)
 
-    # Define camera object compatible with deeplabv3 input
+    # Define camera object compatible with deeplabv3_person_513 input
     rgb = pipeline.createColorCamera()
     rgb.setPreviewSize(nn_shape_1, nn_shape_1)
     rgb.setInterleaved(False)
     
-    # Define a ANN node with deeplabv3_person_256 input
+    # Define a ANN node with deeplabv3_person_513 input
     nn_1 = pipeline.createNeuralNetwork()
     nn_1.setBlobPath(nn_path_1)
 
@@ -29,14 +29,14 @@ def create_pipeline():
     nn_1.input.setBlocking(False) # Queue behavior when full
     nn_1.setNumInferenceThreads(2) # Threads used by the node to run the inference
 
-    # Link the preview output of the camera with the input to ANN
+    # Link the preview of the camera with the input to ANN
     rgb.preview.link(nn_1.input)
 
     rgb.setFps(40)
 
     # Define outputs
     xout_rgb = pipeline.createXLinkOut()
-    xout_rgb.setStreamName("rgb_stream_1")
+    xout_rgb.setStreamName("rgb_stream")
 
     xout_nn_1 = pipeline.createXLinkOut()
     xout_nn_1.setStreamName("nn_1")
@@ -56,13 +56,7 @@ def create_pipeline():
 
 # ---------------------------------------------------------------------------- 
 
-    # Change the parameters to fit the OpenPose
-    rgb.setPreviewSize(nn_shape_2_x, nn_shape_2_y)
-    rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
-    rgb.setInterleaved(False)
-    rgb.setBoardSocket(dai.CameraBoardSocket.RGB)
-    
-    # Define a ANN node with deeplabv3_person_256 input
+    # Define a ANN node with OpenPose input
     nn_2 = pipeline.createNeuralNetwork()
     nn_2.setBlobPath(nn_path_2)
 
@@ -70,21 +64,18 @@ def create_pipeline():
     nn_2.setNumInferenceThreads(2)
     nn_2.input.setQueueSize(1)
     nn_2.input.setBlocking(False) # Queue behavior when full
-    nn_1.setNumInferenceThreads(2) # Threads used by the node to run the inference
+    nn_2.setNumInferenceThreads(2) # Threads used by the node to run the inference
 
-    # Link the preview output of the camera with the input to ANN
-    rgb.preview.link(nn_2.input)
-
-    # Define outputs
-    xout_rgb = pipeline.createXLinkOut()
-    xout_rgb.setStreamName("rgb_stream_2")
-
+    # Define host inputs & outputs
+    xin_nn_2 = pipeline.createXLinkIn()
+    xin_nn_2.setStreamName("nn_2_in")
     xout_nn_2 = pipeline.createXLinkOut()
     xout_nn_2.setStreamName("nn_2")
 
-    nn_2.out.link(xout_rgb.input)   
-
-    # Send the inference data to the host
+    # Define XLink inputs and outputs, relevant for 2 stage inference
+    # 2nd NN inputs is acquired from the XLink stream
+    xin_nn_2.out.link(nn_2.input)
+    # Output of the 2nd NN is also to be sent via XLink stream
     nn_2.out.link(xout_nn_2.input)
 
     return pipeline
@@ -95,13 +86,11 @@ with dai.Device(create_pipeline()) as device:
     print("Starting pipeline...")
     device.startPipeline()
 
-# TODO Pipeline starts successfully, code below is to test can human segmentation be run using it
-# It can't, frame shape mistmatch
 
-"""
     # Host side queues, parameters must correspond those from the pipeline inputs 
-    q_rgb = device.getOutputQueue(name = "rgb_stream_1", maxSize = 4, blocking = False)
-    q_nn = device.getOutputQueue(name = "nn_1", maxSize = 4, blocking = False)
+    q_rgb = device.getOutputQueue(name = "rgb_stream", maxSize = 4, blocking = False)
+    q_nn_1 = device.getOutputQueue(name = "nn_1", maxSize = 4, blocking = False)
+    q_nn_2 = device.getInputQueue(name = "nn_2_in")
 
     # Main program loop
     # ----------------------------------------------------------------------------
@@ -111,12 +100,12 @@ with dai.Device(create_pipeline()) as device:
     counter = 0
     fps = 0
     layer_info_printed = False
+    layer_1_info_printed = False
 
     while True:
         # Fetch latest results
-        # tryGet() will return available data or return None otherwise
-        in_rgb = q_rgb.get()
-        in_nn = q_nn.get()
+        in_rgb = q_rgb.tryGet()
+        in_nn_1 = q_nn_1.tryGet()
 
         # RGB camera input (1D array) conversion into Height-Width-Channels (HWC) form
         if in_rgb is not None:
@@ -125,12 +114,9 @@ with dai.Device(create_pipeline()) as device:
             frame = np.ascontiguousarray(frame)
 
         # ANN results (1D array, fixed size, no matter how much results ANN has produced, results end with -1, the rest is filled with 0s) transformations 
-        if in_nn is not None:
-            # print("NN received")
-            # https://docs.luxonis.com/projects/api/en/latest/references/python/#depthai.NNData.getAllLayers
-            # https://docs.luxonis.com/projects/api/en/latest/references/python/#depthai.TensorInfo
-            layers = in_nn.getAllLayers()
-
+        if in_nn_1 is not None:
+            layers = in_nn_1.getAllLayers()
+       
             # Print the info acquired from the deepplabv3
             if not layer_info_printed:
                 for layer_nr, layer in enumerate(layers):
@@ -144,14 +130,32 @@ with dai.Device(create_pipeline()) as device:
 
             # Relevant information is in layer1
             # getLayerInt32 takes layer name as an argument it is different from getFirstLayerInt32
-            layer_1 = in_nn.getLayerInt32(layers[0].name)
+            layer_1 = in_nn_1.getLayerInt32(layers[0].name)
 
             # Create numpy output
-            ims = layer.dims[::-1]
+            dims = layer.dims[::-1]
             layer_1 = np.asarray(layer_1, dtype=np.int32).reshape(dims)
 
+            # Block of code to print an array into a text file
+            layer_1_to_print = layer_1.reshape(nn_shape_1, nn_shape_1)
+            if not layer_1_info_printed:
+                layer_1_file = open("layer_1.txt", "w")
+                layer_1_file.write("Layer 1 shape:" + str(np.shape(layer_1_to_print)))
+                layer_1_file.write("\n")
+                for i in range(np.shape(layer_1_to_print)[0]):
+                    for j in range(np.shape(layer_1_to_print)[1]):
+                        layer_1_file.write(str(int(layer_1_to_print[i, j])))
+                    layer_1_file.write("\n")
+                layer_1_file.close()
+                layer_1_info_printed = True
+            
+            # Prepare the deeplabv3 colored blob output
             output_colors = decode_deeplabv3p(layer_1)
 
+            nn2_data = dai.NNData()
+            nn2_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
+            q_nn_2.send(nn2_data)
+            
             if frame is not None:
                 frame = show_deeplabv3p(output_colors, frame)
                 cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
@@ -168,4 +172,7 @@ with dai.Device(create_pipeline()) as device:
         if cv2.waitKey(1) == ord('q'):
             break
 
-"""
+
+
+        
+

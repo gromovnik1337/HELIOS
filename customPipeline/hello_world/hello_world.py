@@ -29,13 +29,11 @@ cam_rgb.preview.link(detection_nn.input)
 # Camera frames and ANN results are processed on the camera! To get them to the host machine
 # XLink has to be used. In this case, one needs XLinkOut node
 xout_rgb = pipeline.createXLinkOut()
-
 xout_rgb.setStreamName("rgb") # Naming the stream
 cam_rgb.preview.link(xout_rgb.input) # This sends frames to host
 
 # Same logic for the inference data 
 xout_nn = pipeline.createXLinkOut()
-
 xout_nn.setStreamName("nn")
 detection_nn.out.link(xout_nn.input)
 

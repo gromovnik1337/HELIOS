@@ -109,10 +109,10 @@ while True:
         layer_1 = in_nn.getLayerInt32(layers[0].name)
 
         # Create numpy output
-        ims = layer.dims[::-1]
+        dims = layer.dims[::-1]
         layer_1 = np.asarray(layer_1, dtype=np.int32).reshape(dims)
 
-        output_colors = decode_deeplabv3p(layer_1)
+        output_colors = decode_deeplabv3p(layer_1)    
 
         if frame is not None:
             frame = show_deeplabv3p(output_colors, frame)
