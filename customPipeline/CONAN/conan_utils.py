@@ -34,3 +34,21 @@ def show_deeplabv3p(output_colors, frame):
 # flat list that can be feed into .NNData() 
 def to_planar(arr: np.ndarray, shape: tuple) -> list:
     return [val for channel in cv2.resize(arr, shape).transpose(2, 0, 1) for y_col in channel for val in y_col]    
+
+# From OpenPose
+def cos_dist(a, b):
+    return np.dot(a, b)/(np.linalg.norm(a)*np.linalg.norm(b))
+
+
+def to_tensor_result(packet):
+    return {
+        tensor.name: np.array(packet.getLayerFp16(tensor.name)).reshape(tensor.dims)
+        for tensor in packet.getRaw().tensors
+    }
+
+def frame_norm(frame, bbox):
+    return (np.clip(np.array(bbox), 0, 1) * np.array([*frame.shape[:2], *frame.shape[:2]])[::-1]).astype(int)
+
+
+def to_planar(arr: np.ndarray, shape: tuple) -> list:
+    return cv2.resize(arr, shape).transpose(2,0,1).flatten()

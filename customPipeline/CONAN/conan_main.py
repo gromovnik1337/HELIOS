@@ -171,8 +171,3 @@ with dai.Device(create_pipeline()) as device:
 
         if cv2.waitKey(1) == ord('q'):
             break
-
-
-
-        
-
