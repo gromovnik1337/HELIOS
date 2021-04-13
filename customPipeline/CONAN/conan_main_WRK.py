@@ -8,6 +8,10 @@ import threading
 import time
 import cv2
 
+import threading
+from pathlib import Path
+from pose import getKeypoints, getValidPairs, getPersonwiseKeypoints
+
 # Definition of a pipeline
 # ----------------------------------------------------------------------------
 def create_pipeline():
@@ -67,7 +71,7 @@ def create_pipeline():
     nn_2.setNumInferenceThreads(2) # Threads used by the node to run the inference
 
     # Define host inputs & outputs
-    xin_nn_2 = pipeline.createXLinkIn()
+    xin_nn_2 = pipeline.createXLinkIn() # Equivalent to pose_in in main.py of the OpenPose
     xin_nn_2.setStreamName("nn_2_in")
     xout_nn_2 = pipeline.createXLinkOut()
     xout_nn_2.setStreamName("nn_2")
@@ -82,46 +86,17 @@ def create_pipeline():
 
 # ----------------------------------------------------------------------------
 
-# Relevant for OpenPose
+colors = [[0, 100, 255], [0, 100, 255], [0, 255, 255], [0, 100, 255], [0, 255, 255], [0, 100, 255], [0, 255, 0],
+          [255, 200, 100], [255, 0, 255], [0, 255, 0], [255, 200, 100], [255, 0, 255], [0, 0, 255], [255, 0, 0],
+          [200, 200, 0], [255, 0, 0], [200, 200, 0], [0, 0, 0]]
+POSE_PAIRS = [[1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [1, 11], [11, 12], [12, 13],
+              [1, 0], [0, 14], [14, 16], [0, 15], [15, 17], [2, 17], [5, 16]]
 
-class FPSHandler:
-    def __init__(self, cap=None):
-        self.timestamp = time.time()
-        self.start = time.time()
-        self.framerate = cap.get(cv2.CAP_PROP_FPS) if cap is not None else None
-
-        self.frame_cnt = 0
-        self.ticks = {}
-        self.ticks_cnt = {}
-
-    def next_iter(self):
-        if not args.camera:
-            frame_delay = 1.0 / self.framerate
-            delay = (self.timestamp + frame_delay) - time.time()
-            if delay > 0:
-                time.sleep(delay)
-        self.timestamp = time.time()
-        self.frame_cnt += 1
-
-    def tick(self, name):
-        if name in self.ticks:
-            self.ticks_cnt[name] += 1
-        else:
-            self.ticks[name] = time.time()
-            self.ticks_cnt[name] = 0
-
-    def tick_fps(self, name):
-        if name in self.ticks:
-            return self.ticks_cnt[name] / (time.time() - self.ticks[name])
-        else:
-            return 0
-
-    def fps(self):
-        return self.frame_cnt / (self.timestamp - self.start)
-
-# This script will only take camera as an input
-# fps = fps = FPSHandler()
-
+running = True
+pose = None
+keypoints_list = None
+detected_keypoints = None
+personwiseKeypoints = None
 
 def pose_thread(in_queue):
     global keypoints_list, detected_keypoints, personwiseKeypoints
@@ -131,7 +106,7 @@ def pose_thread(in_queue):
             raw_in = in_queue.get()
         except RuntimeError:
             return
-        fps.tick('nn')
+        #fps.tick('nn')
         heatmaps = np.array(raw_in.getLayerFp16('Mconv7_stage2_L2')).reshape((1, 19, 32, 57))
         pafs = np.array(raw_in.getLayerFp16('Mconv7_stage2_L1')).reshape((1, 38, 32, 57))
         heatmaps = heatmaps.astype('float32')
@@ -161,41 +136,33 @@ def pose_thread(in_queue):
         detected_keypoints, keypoints_list, personwiseKeypoints = (new_keypoints, new_keypoints_list, newPersonwiseKeypoints)
 
 
-
-
 with dai.Device(create_pipeline()) as device:
     print("Starting pipeline...")
     device.startPipeline()
 
-
     # Host side queues, parameters must correspond those from the pipeline inputs 
     q_rgb = device.getOutputQueue(name = "rgb_stream", maxSize = 4, blocking = False)
     q_nn_1 = device.getOutputQueue(name = "nn_1", maxSize = 4, blocking = False)
-    q_nn_2 = device.getInputQueue(name = "nn_2_in", False)
+    
+    q_nn_2 = device.getOutputQueue(name = "nn_2", maxSize = 1, blocking = False)
+    q_nn_2_in = device.getInputQueue(name = "nn_2_in")
+
+    def should_run():
+        return True
+
+
+    def get_frame():
+        return True, np.array(cam_out.get().getData()).reshape((3, 256, 456)).transpose(1, 2, 0).astype(np.uint8)
 
     # Main program loop
     # ----------------------------------------------------------------------------
 
     # Auxiliary variables relevant for output
-    # deeplabV3
     start_time = time.time()
     counter = 0
     fps = 0
     layer_info_printed = False
     layer_1_info_printed = False
-
-    #OpenPose
-    colors = [[0, 100, 255], [0, 100, 255], [0, 255, 255], [0, 100, 255], [0, 255, 255], [0, 100, 255], [0, 255, 0],
-              [255, 200, 100], [255, 0, 255], [0, 255, 0], [255, 200, 100], [255, 0, 255], [0, 0, 255], [255, 0, 0],
-              [200, 200, 0], [255, 0, 0], [200, 200, 0], [0, 0, 0]]
-    POSE_PAIRS = [[1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [1, 11], [11, 12], [12, 13],
-                  [1, 0], [0, 14], [14, 16], [0, 15], [15, 17], [2, 17], [5, 16]]
-
-    running = True
-    pose = None
-    keypoints_list = None
-    detected_keypoints = None
-    personwiseKeypoints = None
 
     while True:
         # Fetch latest results
@@ -247,108 +214,57 @@ with dai.Device(create_pipeline()) as device:
             # Prepare the deeplabv3 colored blob output
             output_colors = decode_deeplabv3p(layer_1)
 
-            # Address the input to OpenPose
+            # Create the output for the OpenPose
             nn2_data = dai.NNData()
-            nn2_data.setLayer("input", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
-            q_nn_2.send(nn2_data)
+            nn2_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
+            q_nn_2_in.send(nn2_data)
 
+            t = threading.Thread(target=pose_thread, args=(q_nn_2, ))
+            t.start()
 
-            # OpenPose
+            #try:
+                #while should_run():
+                    #read_correctly, frame = get_frame()
 
-            if args.camera:
-                cam_out = device.getOutputQueue("cam_out", 1, True)
-                controlQueue = device.getInputQueue('control')
-            else:
-                pose_in = device.getInputQueue("pose_in")
-            pose_nn = device.getOutputQueue("pose_nn", 1, False)
-            #t = threading.Thread(target=pose_thread, args=(pose_nn, ))
-            #t.start()
+                    #if not read_correctly:
+                    #break
 
-            def should_run():
-                return cap.isOpened() if args.video else True
+            h, w = frame.shape[:2]  # 256, 456
+            debug_frame = frame.copy()
+     
+            if keypoints_list is not None and detected_keypoints is not None and personwiseKeypoints is not None:
+                for i in range(18):
+                    for j in range(len(detected_keypoints[i])):
+                        cv2.circle(debug_frame, detected_keypoints[i][j][0:2], 5, colors[i], -1, cv2.LINE_AA)
 
+              
+                for i in range(17):
+                    for n in range(len(personwiseKeypoints)):
+                        index = personwiseKeypoints[n][np.array(POSE_PAIRS[i])]
+                        if -1 in index:
+                            continue
+                        B = np.int32(keypoints_list[index.astype(int), 0])
+                        A = np.int32(keypoints_list[index.astype(int), 1])
 
-            def get_frame():
-                #if args.video:
-                    #return cap.read()
-                #else:
-                return True, np.array(cam_out.get().getData()).reshape((3, 256, 456)).transpose(1, 2, 0).astype(np.uint8)
+                        cv2.line(debug_frame, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
 
-            read_correctly, frame = get_frame()
-
-            #h, w = frame.shape[:2]  # 256, 456
-            #debug_frame = frame.copy()
-
-            if not args.camera:
-                nn_data = dai.NNData()
-                nn_data.setLayer("input", to_planar(frame, (456, 256)))
-                pose_in.send(nn_data)
+            #cv2.putText(debug_frame, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
+            #v2.putText(debug_frame, f"NN FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
+            cv2.imshow("rgb", debug_frame)           
         
-            if debug:
-                if keypoints_list is not None and detected_keypoints is not None and personwiseKeypoints is not None:
-                    for i in range(18):
-                        for j in range(len(detected_keypoints[i])):
-                            cv2.circle(debug_frame, detected_keypoints[i][j][0:2], 5, colors[i], -1, cv2.LINE_AA)
+            if frame is not None:
+                frame = show_deeplabv3p(output_colors, frame)
+                cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
+                cv2.imshow("nn_input", frame)
+        
+            counter+=1
+            if (time.time() - start_time) > 1 :
+                fps = counter / (time.time() - start_time)
 
+                counter = 0
+                start_time = time.time()
 
-                    for i in range(17):
-                        for n in range(len(personwiseKeypoints)):
-                            index = personwiseKeypoints[n][np.array(POSE_PAIRS[i])]
-                            if -1 in index:
-                                continue
-                            B = np.int32(keypoints_list[index.astype(int), 0])
-                            A = np.int32(keypoints_list[index.astype(int), 1])
-
-                            cv2.line(debug_frame, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
-                cv2.putText(debug_frame, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
-                cv2.putText(debug_frame, f"NN FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
-                cv2.imshow("rgb", debug_frame)
-
-            key = cv2.waitKey(1)
-            if key == ord('q'):
+            if cv2.waitKey(1) == ord('q'):
                 break
-                
-            elif key == ord('t'):
-                print("Autofocus trigger (and disable continuous)")
-                ctrl = dai.CameraControl()
-                ctrl.setAutoFocusMode(dai.CameraControl.AutoFocusMode.AUTO)
-                ctrl.setAutoFocusTrigger()
-                controlQueue.send(ctrl)            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            
-    if frame is not None:
-            frame = show_deeplabv3p(output_colors, frame)
-            cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
-            cv2.imshow("nn_input", frame)
-    
-    counter+=1
-    if (time.time() - start_time) > 1 :
-        fps = counter / (time.time() - start_time)
-
-        counter = 0
-        start_time = time.time()
-
-
-    if cv2.waitKey(1) == ord('q'):
-        break
-
-
-
-        
-
+      
+t.join()

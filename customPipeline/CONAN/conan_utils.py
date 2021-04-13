@@ -8,6 +8,7 @@ nn_path_1 = "./models/deeplab_v3_plus_mvn2_decoder_513_openvino_2021.2_6shave.bl
 nn_shape_1 = 513
 
 # Path of the OpenPose model
+# 8 shaves are used for video (cap) output, 6 for camera
 nn_path_2 = "./models/human-pose-estimation-0001_openvino_2021.2_6shave.blob"
 nn_shape_2_x = 456
 nn_shape_2_y = 256
