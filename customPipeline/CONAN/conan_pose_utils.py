@@ -1,5 +1,12 @@
-import cv2
+#!/usr/bin/env python3
 import numpy as np
+import cv2
+
+# Path of the OpenPose model
+# 8 shaves are used for video (cap) output, 6 for camera
+nn_path_2 = "./models/human-pose-estimation-0001_openvino_2021.2_6shave.blob"
+nn_shape_2_x = 456
+nn_shape_2_y = 256
 
 keypointsMapping = ['Nose', 'Neck', 'R-Sho', 'R-Elb', 'R-Wr', 'L-Sho', 'L-Elb', 'L-Wr', 'R-Hip', 'R-Knee', 'R-Ank',
                     'L-Hip', 'L-Knee', 'L-Ank', 'R-Eye', 'L-Eye', 'R-Ear', 'L-Ear']
@@ -11,7 +18,24 @@ colors = [[0, 100, 255], [0, 100, 255], [0, 255, 255], [0, 100, 255], [0, 255, 2
           [255, 200, 100], [255, 0, 255], [0, 255, 0], [255, 200, 100], [255, 0, 255], [0, 0, 255], [255, 0, 0],
           [200, 200, 0], [255, 0, 0], [200, 200, 0], [0, 0, 0]]
 
+def cos_dist(a, b):
+    return np.dot(a, b)/(np.linalg.norm(a)*np.linalg.norm(b))
 
+def to_tensor_result(packet):
+    return {
+        tensor.name: np.array(packet.getLayerFp16(tensor.name)).reshape(tensor.dims)
+        for tensor in packet.getRaw().tensors
+    }
+
+def frame_norm(frame, bbox):
+    return (np.clip(np.array(bbox), 0, 1) * np.array([*frame.shape[:2], *frame.shape[:2]])[::-1]).astype(int)
+
+# Converts a rgb camera frame that has to be in numpy array format, dimensions (H X W X 3) into a 
+# flat list that can be feed into .NNData() 
+def to_planar(arr: np.ndarray, shape: tuple) -> list:
+    return cv2.resize(arr, shape).transpose(2,0,1).flatten()
+
+# threshold as a probability?
 def getKeypoints(probMap, threshold=0.2):
     mapSmooth = cv2.GaussianBlur(probMap, (3, 3), 0, 0)
     mapMask = np.uint8(mapSmooth > threshold)
@@ -32,7 +56,6 @@ def getKeypoints(probMap, threshold=0.2):
         keypoints.append(maxLoc + (probMap[maxLoc[1], maxLoc[0]],))
 
     return keypoints
-
 
 def getValidPairs(outputs, w, h, detected_keypoints):
     valid_pairs = []
@@ -89,7 +112,6 @@ def getValidPairs(outputs, w, h, detected_keypoints):
             valid_pairs.append([])
     return valid_pairs, invalid_pairs
 
-
 def getPersonwiseKeypoints(valid_pairs, invalid_pairs, keypoints_list):
     personwiseKeypoints = -1 * np.ones((0, 19))
 
@@ -120,10 +142,3 @@ def getPersonwiseKeypoints(valid_pairs, invalid_pairs, keypoints_list):
                     row[-1] = sum(keypoints_list[valid_pairs[k][i, :2].astype(int), 2]) + valid_pairs[k][i][2]
                     personwiseKeypoints = np.vstack([personwiseKeypoints, row])
     return personwiseKeypoints
-
-
-threshold = 0.3
-nPoints = 18
-w = 456
-h = 256
-detected_keypoints = []
