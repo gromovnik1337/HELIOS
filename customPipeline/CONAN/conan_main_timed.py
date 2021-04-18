@@ -91,7 +91,13 @@ keypoints_list = None
 detected_keypoints = None
 personwiseKeypoints = None
 
-with dai.Device(create_pipeline()) as device:
+# Frame that is to be sent inside XLink for the OpenPose to perform inference
+nn2_frame_data = dai.NNData()
+
+# Create the pipeline object
+pipeline = create_pipeline()
+
+with dai.Device(pipeline) as device:
     print("Starting pipeline...")
     device.startPipeline()
 
@@ -106,16 +112,23 @@ with dai.Device(create_pipeline()) as device:
     # ----------------------------------------------------------------------------
 
     # Auxiliary variables relevant for output
-    start_time = time.time()
     counter = 0
     fps = 0
     layer_info_printed = False
     layer_1_info_printed = False
 
+    start_time = time.time()
+    fps_start_time = time.time()
+    curr_time = time.time()
+    stop_deeplab = 5
+    deeplab_on = False # Needed because the lock-on time can still be ticking but the inference data still hasn't come
+
+    # It takes time for the camera to start
+    frame = None
+
     while True:
         # Fetch latest results
         in_rgb = q_rgb.tryGet()
-        in_nn_1 = q_nn_1.tryGet()
 
         # RGB camera input (1D array) conversion into Height-Width-Channels (HWC) form
         if in_rgb is not None:
@@ -123,34 +136,46 @@ with dai.Device(create_pipeline()) as device:
             frame = in_rgb.getData().reshape(shape).transpose(1, 2, 0).astype(np.uint8)
             frame = np.ascontiguousarray(frame)
 
-        # ANN results (1D array, fixed size, no matter how much results ANN has produced, results end with -1, the rest is filled with 0s) transformations 
-        if in_nn_1 is not None:
-            layers = in_nn_1.getAllLayers()
+        if frame is not None:    
 
-            # Print deepplabv3 info
-            if not layer_info_printed:
-                printDeeplabv3Info(layers)
-                layer_info_printed = True
+            passed_time = int(curr_time - start_time)
+            print("Time passed: ", passed_time)
 
-            # Relevant information is in layer1
-            layer_1 = in_nn_1.getLayerInt32(layers[0].name)
+            if passed_time < stop_deeplab:
+                
+                # ANN results (1D array, fixed size, no matter how much results ANN has produced, results end with -1, the rest is filled with 0s) transformations 
+                in_nn_1 = q_nn_1.tryGet()
 
-            # Create numpy output
-            dims = layers[0].dims[::-1] # reverse dimensions
-            layer_1 = np.asarray(layer_1, dtype=np.int32).reshape(dims)
+                if in_nn_1 is not None:
+                    deeplab_on = True
+                    layers = in_nn_1.getAllLayers()
 
-            # Print the first layer into a .txt file
-            if not layer_1_info_printed:
-                printLayer1Info(layer_1)              
-                layer_1_info_printed = True
-            
-            # Prepare the deeplabv3 colored blob output
-            output_colors = decode_deeplabv3p(layer_1)
+                    # Print deepplabv3 info
+                    if not layer_info_printed:
+                        printDeeplabv3Info(layers)
+                        layer_info_printed = True
+                    # Relevant information is in layer1
+                    layer_1 = in_nn_1.getLayerInt32(layers[0].name)
+
+                    # Create numpy output
+                    dims = layers[0].dims[::-1] # reverse dimensions
+                    layer_1 = np.asarray(layer_1, dtype=np.int32).reshape(dims)
+
+                    # Print the first layer into a .txt file
+                    if not layer_1_info_printed:
+                        printLayer1Info(layer_1)              
+                        layer_1_info_printed = True
+                
+                    # Prepare the deeplabv3 colored blob output
+                    output_colors = decode_deeplabv3p(layer_1)
+
+            #else:
+                #pipeline.remove(nn_1)
+                
 
             # Feed the OpenPose
-            nn2_data = dai.NNData()
-            nn2_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
-            q_nn_2_in.send(nn2_data)
+            nn2_frame_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
+            q_nn_2_in.send(nn2_frame_data)
 
             # Start the OpenPose
             in_nn_2 = q_nn_2.tryGet()
@@ -185,7 +210,7 @@ with dai.Device(create_pipeline()) as device:
 
                 detected_keypoints, keypoints_list, personwiseKeypoints = (new_keypoints, new_keypoints_list, newPersonwiseKeypoints)
 
-            h, w = frame.shape[:2]  # 513, 513
+            h, w = frame.shape[:2]  # 256, 456
 
             #debug_frame = frame.copy()
 
@@ -208,19 +233,23 @@ with dai.Device(create_pipeline()) as device:
 
                 #cv2.imshow("OpenPose", frame)
 
-                frame = show_deeplabv3p(output_colors, frame)
-
                 cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
                 cv2.putText(frame, "Frame size: {0}x{1}".format(h,w), (365, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
-                
-                cv2.imshow("CONAN", frame)
-                           
+
+                if deeplab_on is True:
+                    frame_with_deeplab = show_deeplabv3p(output_colors, frame)
+                    cv2.imshow("CONAN", frame_with_deeplab)
+                else:
+                    cv2.imshow("CONAN", frame)
+                        
             counter+=1
-            if (time.time() - start_time) > 1 :
-                fps = counter / (time.time() - start_time)
+            if (time.time() - fps_start_time) > 1 :
+                fps = counter / (time.time() - fps_start_time)
 
                 counter = 0
-                start_time = time.time()
-    
+                fps_start_time = time.time()
+
+            curr_time = time.time()
+
             if cv2.waitKey(1) == ord('q'):
                 break
