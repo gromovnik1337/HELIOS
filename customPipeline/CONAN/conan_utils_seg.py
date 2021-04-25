@@ -42,5 +42,27 @@ def printLayer1Info(layer_1):
         layer_1_file.write("\n")
     layer_1_file.close()
 
+def segment_human(output_tensor):
+    """Based on the decode_deeplabv3 function
+
+    Args:
+        output_tensor (LayerInt32): Layer output of the human segmentation NN
+
+    Returns:
+        numpy_array: Greyscale mask, representing frame around the human. 
+        Replacing cv2.THRESH_BINARY_INV with cv2.THRESH_BINARY will produce the opposite effect.
+    """
+    class_colors = [[0,0,0],  [0,255,0]]
+    class_colors = np.asarray(class_colors, dtype=np.uint8) # (2,3) numpy array
+    # 1-D output of the layer_1 re-shaping in the shape of the NN input, to be ready for the display
+    output = output_tensor.reshape(nn_shape_1, nn_shape_1)
+    # Take only the indices of the full color array that contain the person
+    output_colors = np.take(class_colors, output, axis = 0) # (513, 513, 3) numpy array
+    output_colors_grey = cv2.cvtColor(output_colors, cv2.COLOR_BGR2GRAY)
+    # ret, mask = cv2.threshold(output_colors_grey, 10, 255, cv2.THRESH_BINARY_INV) # (513, 513) numpy array
+    ret, mask = cv2.threshold(output_colors_grey, 10, 255, cv2.THRESH_BINARY) # (513, 513) numpy array
+    return mask
+
+
 
 
