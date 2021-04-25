@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def distanceBetweenKeypoints(kpt_1: list, kpt_2: list)-> float:
     """Compute the euclidean distance between two keypoints
 
