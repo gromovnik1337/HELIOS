@@ -118,13 +118,12 @@ with dai.Device(pipeline) as device:
     # ----------------------------------------------------------------------------
 
     # Auxiliary variables relevant for output
-    counter = 0
-    fps = 0
     layer_info_printed = False
     layer_1_info_printed = False
 
+    fps = FPSHandler() # TODO Change when you create video input possibility. Changes recquired inside the FPS handler class
+
     start_time = time.time()
-    fps_start_time = time.time()
     curr_time = time.time()
     stop_deeplab = 30 # Lock-on time
     deeplab_on = False # Needed because the lock-on time can still be ticking but the inference data still hasn't come
@@ -186,6 +185,9 @@ with dai.Device(pipeline) as device:
 
             if in_nn_2 is not None:
 
+                # Only the FPS performance of OpenPose is measured
+                fps.tick('nn')
+                
                 heatmaps = np.array(in_nn_2.getLayerFp16('Mconv7_stage2_L2')).reshape((1, 19, 32, 57))
                 pafs = np.array(in_nn_2.getLayerFp16('Mconv7_stage2_L1')).reshape((1, 38, 32, 57))
                 heatmaps = heatmaps.astype('float32')
@@ -223,7 +225,9 @@ with dai.Device(pipeline) as device:
                     frame = cv2.resize(frame, (nn_shape_1, nn_shape_1) )
                 else:
                     pass
-                
+
+                fps.next_iter()
+
                 if keypoints_list is not None and detected_keypoints is not None and personwiseKeypoints is not None:
                     for i in range(18):
                         for j in range(len(detected_keypoints[i])):
@@ -238,8 +242,9 @@ with dai.Device(pipeline) as device:
                             A = np.int32(keypoints_list[index.astype(int), 1])
 
                             cv2.line(frame, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
-
-                cv2.putText(frame, "NN fps: {:.2f}".format(fps), (2, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
+                
+                cv2.putText(frame, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
+                cv2.putText(frame, f"OpenPose FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
                 cv2.putText(frame, "Frame size: {0}x{1}".format(h,w), (340, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
 
                 if deeplab_on is True:
@@ -247,15 +252,8 @@ with dai.Device(pipeline) as device:
                     cv2.imshow("CONAN", frame_with_deeplab)
                 else:
                     cv2.imshow("CONAN", frame)
-                        
-            counter+=1
-            if (time.time() - fps_start_time) > 1 :
-                fps = counter / (time.time() - fps_start_time)
-
-                counter = 0
-                fps_start_time = time.time()
-
             curr_time = time.time()
+            print("FPS: {:.2f}".format(fps.fps()))
 
             if cv2.waitKey(1) == ord('q'):
                 break
