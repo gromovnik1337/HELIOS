@@ -127,7 +127,7 @@ with dai.Device(pipeline) as device:
 
     start_time = time.time()
     curr_time = time.time()
-    stop_deeplab = 30 # Lock-on time
+    stop_deeplab = 45 # Lock-on time
     deeplab_on = False # Needed because the lock-on time can still be ticking but the inference data still hasn't come
 
     # It takes time for the camera to start
@@ -184,18 +184,24 @@ with dai.Device(pipeline) as device:
                     # Prepare the deeplabv3 colored blob output
                     output_colors = decode_deeplabv3p(layer_1)
 
-            # Feed the OpenPose
-            nn2_frame_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
-            q_nn_2_in.send(nn2_frame_data)
 
             if deeplab_on is True:
-                    # Segment the human
-                    # Make a separate frame not to superimpose the results of the first bitwise operation
-                    frame_seg = frame.copy()
-                    frame_seg_human = segment_human(layer_1)                  
-                    frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
-                    print(np.shape(frame_seg_human))
-                    cv2.imshow("Segmented human", frame_seg_human)
+                # Segment the human
+                # Make a separate frame not to superimpose the results of the first bitwise operation
+                frame_seg = frame.copy()
+                frame_seg_human = segment_human(layer_1)                  
+                frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
+                print(np.shape(frame_seg_human))
+                cv2.imshow("Segmented human", frame_seg_human)
+                # Feed the OpenPose
+                nn2_frame_data.setLayer("0", to_planar(frame_seg_human, (nn_shape_2_x, nn_shape_2_y)))
+                q_nn_2_in.send(nn2_frame_data)
+
+            else:
+                # Feed the OpenPose
+                nn2_frame_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
+                q_nn_2_in.send(nn2_frame_data)
+
 
             # Start the OpenPose
             in_nn_2 = q_nn_2_out.tryGet()
@@ -283,12 +289,6 @@ with dai.Device(pipeline) as device:
                 cv2.putText(frame_display, "Frame size: {0}x{1}".format(h,w), (340, frame_display.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
 
                 if deeplab_on is True:
-                    """
-                    # Segment the human
-                    frame_seg_human = segment_human(layer_1)                  
-                    frame_seg_human = cv2.bitwise_not(frame, frame, mask = frame_seg_human)
-                    cv2.imshow("Segmented human", frame_seg_human)
-                    """
                     # Superimpose the green blob
                     frame_with_deeplab = show_deeplabv3p(output_colors, frame_display)
 
