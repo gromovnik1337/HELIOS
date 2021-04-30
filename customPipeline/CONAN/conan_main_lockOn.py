@@ -4,6 +4,8 @@ from conan_utils_pose import *
 from conan_utils_seg import *
 from conan_utils_gen import *
 from keypoint_data_extraction import getKeypointsData
+# import skimage
+# from skimage import measure
 
 import depthai as dai
 import numpy as np
@@ -297,6 +299,24 @@ with dai.Device(pipeline) as device:
                     cv2.rectangle(frame_with_deeplab, (human_x - 20, human_y + 20), (human_x + 20, human_y - 20), (0, 0, 255), 5)
                     cv2.line(frame_with_deeplab, (human_x, human_y + 30), (human_x, human_y - 30), (0, 0, 255), 2)
                     cv2.line(frame_with_deeplab, (human_x - 30, human_y), (human_x + 30, human_y), (0, 0, 255), 2)
+                    # Process human blob, could be removed TBTested
+                    # segmented_object_labeled = measure.label(layer_1_to_lock_on)
+                    # regions = measure.regionprops(segmented_object_labeled)
+                    # regions.sort(key=lambda x: x.area, reverse=True)
+                    # if len(regions) > 1:
+                    #     for rg in regions[1:]:
+                    #         segmented_object_labeled[rg.coords[:,0], rg.coords[:,1]] = 0
+                    frame_seg_human_gray = cv2.cvtColor(frame_seg_human, cv2.COLOR_BGR2GRAY)
+                    one_blob_mask = frame_seg_human_gray > 0
+                    segmented_object_filtered = np.zeros_like(frame_with_deeplab, dtype=np.uint8)
+                    segmented_object_filtered[one_blob_mask] = frame_with_deeplab[one_blob_mask]
+                    ret, lb_mk_thres_1= cv2.threshold(frame_seg_human_gray,12,255,cv2.THRESH_BINARY)
+                    segmented_object_filtered_contours= cv2.findContours(frame_seg_human_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+                    x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(segmented_object_filtered_contours[0])
+                    padding_width = int(w_bb//10)
+                    padding_height = int(h_bb//10)
+                    cv2.rectangle(frame_with_deeplab,(x_bb,y_bb),(x_bb+w_bb,y_bb+h_bb),(0,255,0),2)
+                    cv2.rectangle(frame_with_deeplab,(x_bb-padding_width,y_bb-padding_height),(x_bb+w_bb+padding_width,y_bb+h_bb+padding_height),(225,0,0),2)
 
                     cv2.imshow("CONAN", frame_with_deeplab)
                 else:
