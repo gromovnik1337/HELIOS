@@ -97,6 +97,8 @@ def create_pipeline():
 keypoints_list = None
 detected_keypoints = None
 personwiseKeypoints = None
+prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = 0, 0, 0, 0
+x_bb, y_bb, w_bb, h_bb = 0, 0, 513, 513
 
 # Frame that is to be sent inside XLink to perform inference
 nn1_frame_data = dai.NNData()
@@ -191,12 +193,35 @@ with dai.Device(pipeline) as device:
                 # Segment the human
                 # Make a separate frame not to superimpose the results of the first bitwise operation
                 frame_seg = frame.copy()
+                frame_seg_vis = frame.copy()
+                frame_seg_vis_gray = cv2.cvtColor(frame_seg_vis, cv2.COLOR_BGR2GRAY)
                 frame_seg_human = segment_human(layer_1)                  
                 frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
+                frame_seg_human_gray = cv2.cvtColor(frame_seg_human, cv2.COLOR_BGR2GRAY)
+                prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = x_bb,y_bb, w_bb, h_bb
+                lb_mk_thres_1= cv2.threshold(frame_seg_human_gray,1,255,cv2.THRESH_BINARY)[1]
+                lb_mk_eroded = cv2.erode(frame_seg_human_gray, None, iterations = 3)
+                lb_mk_dilated = cv2.dilate(lb_mk_eroded,None, iterations = 3)
+                # cv2.imshow("lb_mk_thres", lb_mk_dilated)
+                segmented_object_filtered_contours= cv2.findContours(lb_mk_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+                x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(segmented_object_filtered_contours[0])
+                if w_bb < 20 or h_bb < 20:
+                    x_bb, y_bb, w_bb, h_bb = prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb
+                bb_mask_template = np.zeros_like(frame_seg_vis_gray, dtype=np.uint8)
+                cv2.imshow("ROI",frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb])
+                bb_mask_template[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb] = frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb]
+                bb_mask= cv2.threshold(bb_mask_template,0,255,cv2.THRESH_BINARY)[1]
+                bb_mask_bool = bb_mask > 10
+                frame_seg_bb = np.zeros_like(frame_seg_vis, dtype=np.uint8)
+                frame_seg_bb[bb_mask_bool] = frame_seg_vis[bb_mask_bool]
+                padding_width = int(w_bb//10)
+                padding_height = int(h_bb//10)
                 print(np.shape(frame_seg_human))
+                print(x_bb, y_bb, w_bb, h_bb)
                 cv2.imshow("Segmented human", frame_seg_human)
+                # cv2.imshow("Segmented Bounding Box", frame_seg_bb)
                 # Feed the OpenPose
-                nn2_frame_data.setLayer("0", to_planar(frame_seg_human, (nn_shape_2_x, nn_shape_2_y)))
+                nn2_frame_data.setLayer("0", to_planar(frame_seg_bb, (nn_shape_2_x, nn_shape_2_y)))
                 q_nn_2_in.send(nn2_frame_data)
 
             else:
@@ -299,22 +324,7 @@ with dai.Device(pipeline) as device:
                     cv2.rectangle(frame_with_deeplab, (human_x - 20, human_y + 20), (human_x + 20, human_y - 20), (0, 0, 255), 5)
                     cv2.line(frame_with_deeplab, (human_x, human_y + 30), (human_x, human_y - 30), (0, 0, 255), 2)
                     cv2.line(frame_with_deeplab, (human_x - 30, human_y), (human_x + 30, human_y), (0, 0, 255), 2)
-                    # Process human blob, could be removed TBTested
-                    # segmented_object_labeled = measure.label(layer_1_to_lock_on)
-                    # regions = measure.regionprops(segmented_object_labeled)
-                    # regions.sort(key=lambda x: x.area, reverse=True)
-                    # if len(regions) > 1:
-                    #     for rg in regions[1:]:
-                    #         segmented_object_labeled[rg.coords[:,0], rg.coords[:,1]] = 0
-                    frame_seg_human_gray = cv2.cvtColor(frame_seg_human, cv2.COLOR_BGR2GRAY)
-                    one_blob_mask = frame_seg_human_gray > 0
-                    segmented_object_filtered = np.zeros_like(frame_with_deeplab, dtype=np.uint8)
-                    segmented_object_filtered[one_blob_mask] = frame_with_deeplab[one_blob_mask]
-                    ret, lb_mk_thres_1= cv2.threshold(frame_seg_human_gray,12,255,cv2.THRESH_BINARY)
-                    segmented_object_filtered_contours= cv2.findContours(frame_seg_human_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-                    x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(segmented_object_filtered_contours[0])
-                    padding_width = int(w_bb//10)
-                    padding_height = int(h_bb//10)
+                    
                     cv2.rectangle(frame_with_deeplab,(x_bb,y_bb),(x_bb+w_bb,y_bb+h_bb),(0,255,0),2)
                     cv2.rectangle(frame_with_deeplab,(x_bb-padding_width,y_bb-padding_height),(x_bb+w_bb+padding_width,y_bb+h_bb+padding_height),(225,0,0),2)
 
