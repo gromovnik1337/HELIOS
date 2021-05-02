@@ -11,9 +11,57 @@ from imutils.video import FPS
 import threading
 import time
 import cv2
+import argparse
 
-import threading
 from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-cam', '--camera', action="store_true", help="Use DepthAI 4K RGB camera for inference (conflicts with -vid)")
+parser.add_argument('-vid', '--video', type=str, help="Path to video file to be used for inference (conflicts with -cam)")
+args = parser.parse_args()
+
+if not args.camera and not args.video:
+    raise RuntimeError("No source selected. Please use either \"-cam\" to use RGB camera as a source or \"-vid <path>\" to run on video")
+
+# Delay correction for the video input
+delayCorrection = 3.5
+
+# 02.05.2021 added back to the main script. args value was not transmitted to the utils script
+class FPSHandler:
+    """Class that handles the FPS counting and the frame delay in case of the video source.
+    """
+    def __init__(self, cap=None):
+        self.timestamp = time.time()
+        self.start = time.time()
+        self.framerate = cap.get(cv2.CAP_PROP_FPS) if cap is not None else None
+        self.frame_cnt = 0
+        self.ticks = {}
+        self.ticks_cnt = {}
+
+    def next_iter(self):
+        if not args.camera:
+            frame_delay = 1.0 / self.framerate
+            delay = (self.timestamp + frame_delay) - time.time()
+            if delay > 0:
+                time.sleep(delay*delayCorrection)
+        self.timestamp = time.time()
+        self.frame_cnt += 1
+
+    def tick(self, name):
+        if name in self.ticks:
+            self.ticks_cnt[name] += 1
+        else:
+            self.ticks[name] = time.time()
+            self.ticks_cnt[name] = 0
+
+    def tick_fps(self, name):
+        if name in self.ticks:
+            return self.ticks_cnt[name] / (time.time() - self.ticks[name])
+        else:
+            return 0
+
+    def fps(self):
+        return self.frame_cnt / (self.timestamp - self.start)
 
 # Definition of a pipeline
 # ----------------------------------------------------------------------------
@@ -27,8 +75,6 @@ def create_pipeline():
 
     # Set the resolution
     rgb.setPreviewSize(nn_shape_1, nn_shape_1)
-    # rgb.setPreviewSize(1920, 1080)
-
     rgb.setInterleaved(False)
     rgb.setFps(60)
 
@@ -54,7 +100,7 @@ def create_pipeline():
     # Define inputs & outputs to the host
     xin_nn_1 = pipeline.createXLinkIn() 
     xin_nn_1.setStreamName("nn_1_in")
-  
+
     xout_nn_1 = pipeline.createXLinkOut()
     xout_nn_1.setStreamName("nn_1_out")
 
@@ -96,6 +142,11 @@ keypoints_list = None
 detected_keypoints = None
 personwiseKeypoints = None
 
+# ROI parameters
+ROI_on = True
+prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = 0, 0, 0, 0
+x_bb, y_bb, w_bb, h_bb = 0, 0, 513, 513
+
 # Frame that is to be sent inside XLink to perform inference
 nn1_frame_data = dai.NNData()
 nn2_frame_data = dai.NNData()
@@ -123,26 +174,41 @@ with dai.Device(pipeline) as device:
     layer_info_printed = False
     layer_1_info_printed = False
 
-    fps = FPSHandler() # TODO Change when you create video input possibility. Changes recquired inside the FPS handler class
+    # Determine source -relevant parameters
+    if args.camera:
+        fps = FPSHandler()
+    else:
+        cap = cv2.VideoCapture(str(Path(args.video).resolve().absolute()))
+        fps = FPSHandler(cap)
 
     start_time = time.time()
     curr_time = time.time()
-    stop_deeplab = 30 # Lock-on time
+    stop_deeplab = 45 # Lock-on time
     deeplab_on = False # Needed because the lock-on time can still be ticking but the inference data still hasn't come
 
-    # It takes time for the camera to start
+    # It takes time for the camera to start or to receive video frames
     # No post data processing is possible until first frame is received
     frame = None
 
     while True:
-        # Fetch latest results
-        in_rgb = q_rgb.tryGet()
 
-        # RGB camera input (1D array) conversion into Height-Width-Channels (HWC) form
-        if in_rgb is not None:
-            shape = (3, in_rgb.getHeight(), in_rgb.getWidth())
-            frame = in_rgb.getData().reshape(shape).transpose(1, 2, 0).astype(np.uint8)
+        if args.video:
+            cap.isOpened()
+            cap.read()
+            read_correctly, frame = cap.read() # read_correctly currently not used
+            dim = (nn_shape_1, nn_shape_1)
+            frame = cv2.resize(frame, dim)
             frame = np.ascontiguousarray(frame)
+        else:
+            # Fetch latest results
+            in_rgb = q_rgb.tryGet()
+            read_correctly = True
+
+            # RGB camera input (1D array) conversion into Height-Width-Channels (HWC) form
+            if in_rgb is not None:
+                shape = (3, in_rgb.getHeight(), in_rgb.getWidth())
+                frame = in_rgb.getData().reshape(shape).transpose(1, 2, 0).astype(np.uint8)
+                frame = np.ascontiguousarray(frame)
 
         if frame is not None:    
             passed_time = int(curr_time - start_time)
@@ -175,12 +241,63 @@ with dai.Device(pipeline) as device:
                         printLayer1Info(layer_1)              
                         layer_1_info_printed = True
                 
-                    # Prepare the deeplabv3 colored blob output
-                    output_colors = decode_deeplabv3p(layer_1)               
+                    # Take only X and Y (frame of 1s and 0s) part of the deeplab output
+                    layer_1_to_lock_on = layer_1.reshape(nn_shape_1, nn_shape_1)
+                    # Sum up the rows and the columns, find where is the max = that is the center of the human
+                    human_x = np.argmax(np.sum(layer_1_to_lock_on, 0))
+                    human_y = np.argmax(np.sum(layer_1_to_lock_on, 1))
 
-            # Feed the OpenPose
-            nn2_frame_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
-            q_nn_2_in.send(nn2_frame_data)
+                    # Prepare the deeplabv3 colored blob output
+                    output_colors = decode_deeplabv3p(layer_1)
+
+
+            if deeplab_on is True:
+                # Segment the human
+                # Make a separate frame not to superimpose the results of the first bitwise operation
+                if ROI_on:
+                    frame_seg = frame.copy()
+                    frame_seg_vis = frame.copy()
+                    frame_seg_vis_gray = cv2.cvtColor(frame_seg_vis, cv2.COLOR_BGR2GRAY)
+                    frame_seg_human = segment_human(layer_1)                  
+                    frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
+                    frame_seg_human_gray = cv2.cvtColor(frame_seg_human, cv2.COLOR_BGR2GRAY)
+                    prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = x_bb,y_bb, w_bb, h_bb
+                    lb_mk_thres_1= cv2.threshold(frame_seg_human_gray,1,255,cv2.THRESH_BINARY)[1]
+                    lb_mk_eroded = cv2.erode(frame_seg_human_gray, None, iterations = 3)
+                    lb_mk_dilated = cv2.dilate(lb_mk_eroded,None, iterations = 3)
+        
+                    segmented_object_filtered_contours= cv2.findContours(lb_mk_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+                    x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(segmented_object_filtered_contours[0])
+                    if w_bb < 20 or h_bb < 20:
+                        x_bb, y_bb, w_bb, h_bb = prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb
+                    bb_mask_template = np.zeros_like(frame_seg_vis_gray, dtype=np.uint8)
+                    cv2.imshow("ROI",frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb])
+                    bb_mask_template[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb] = frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb]
+                    bb_mask= cv2.threshold(bb_mask_template,0,255,cv2.THRESH_BINARY)[1]
+                    bb_mask_bool = bb_mask > 10
+                    frame_seg_bb = np.zeros_like(frame_seg_vis, dtype=np.uint8)
+                    frame_seg_bb[bb_mask_bool] = frame_seg_vis[bb_mask_bool]
+                    padding_width = int(w_bb//10)
+                    padding_height = int(h_bb//10)
+                    print(np.shape(frame_seg_human))
+                    print(x_bb, y_bb, w_bb, h_bb)
+                    cv2.imshow("Segmented human", frame_seg_human)
+
+                else:
+                    frame_seg = frame.copy()
+                    frame_seg_human = segment_human(layer_1)                  
+                    frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
+                    print(np.shape(frame_seg_human))
+                    cv2.imshow("Segmented human", frame_seg_human)
+
+                # Feed the OpenPose
+                nn2_frame_data.setLayer("0", to_planar(frame_seg_human, (nn_shape_2_x, nn_shape_2_y)))
+                q_nn_2_in.send(nn2_frame_data)
+
+            else:
+                # Feed the OpenPose
+                nn2_frame_data.setLayer("0", to_planar(frame, (nn_shape_2_x, nn_shape_2_y)))
+                q_nn_2_in.send(nn2_frame_data)
 
             # Start the OpenPose
             in_nn_2 = q_nn_2_out.tryGet()
@@ -221,11 +338,15 @@ with dai.Device(pipeline) as device:
             h, w = frame.shape[:2] 
 
             if frame is not None:
+                # Create a copy of frame that will be used for plotting (lines, blobs, points etc.)
+                # One frame has to be "clean" to be used for segmentation results and feeding NN
                 # If the RGB input resolution is different than deeplabs input, show_deeplabv3p function does not work
                 # This if statement makes sure that deeplab always get expected frame size
                 if deeplab_on is True: 
-                    frame = cv2.resize(frame, (nn_shape_1, nn_shape_1) )
+                    frame_display = frame.copy()
+                    frame_display = cv2.resize(frame, (nn_shape_1, nn_shape_1) )
                 else:
+                    frame_display = frame.copy()
                     pass
 
                 # One round of OpenPose inference fps tracking done    
@@ -247,7 +368,7 @@ with dai.Device(pipeline) as device:
                     #---------------------------------------------------------------
                     for i in range(18):
                         for j in range(len(detected_keypoints[i])):
-                            cv2.circle(frame, detected_keypoints[i][j][0:2], 5, colors[i], -1, cv2.LINE_AA)
+                            cv2.circle(frame_display, detected_keypoints[i][j][0:2], 5, colors[i], -1, cv2.LINE_AA)
 
                     for i in range(17):
                         for n in range(len(personwiseKeypoints)):
@@ -257,19 +378,31 @@ with dai.Device(pipeline) as device:
                             B = np.int32(keypoints_list[index.astype(int), 0])
                             A = np.int32(keypoints_list[index.astype(int), 1])
 
-                            cv2.line(frame, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
+                            cv2.line(frame_display, (B[0], A[0]), (B[1], A[1]), colors[i], 3, cv2.LINE_AA)
                 
-                cv2.putText(frame, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
-                cv2.putText(frame, f"OpenPose FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
-                cv2.putText(frame, "Frame size: {0}x{1}".format(h,w), (340, frame.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
+                cv2.putText(frame_display, f"RGB FPS: {round(fps.fps(), 1)}", (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
+                cv2.putText(frame_display, f"OpenPose FPS:  {round(fps.tick_fps('nn'), 1)}", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0))
+                cv2.putText(frame_display, "Frame size: {0}x{1}".format(h,w), (340, frame_display.shape[0] - 4), cv2.FONT_HERSHEY_TRIPLEX, 0.4, (255, 0, 0))
 
                 if deeplab_on is True:
-                    frame_with_deeplab = show_deeplabv3p(output_colors, frame)
+                    # Superimpose the green blob
+                    frame_with_deeplab = show_deeplabv3p(output_colors, frame_display)
+
+                    # Create the crosshair
+                    cv2.circle(frame_with_deeplab, (human_x, human_y), 15, (0, 0, 255), 2)
+                    cv2.rectangle(frame_with_deeplab, (human_x - 20, human_y + 20), (human_x + 20, human_y - 20), (0, 0, 255), 5)
+                    cv2.line(frame_with_deeplab, (human_x, human_y + 30), (human_x, human_y - 30), (0, 0, 255), 2)
+                    cv2.line(frame_with_deeplab, (human_x - 30, human_y), (human_x + 30, human_y), (0, 0, 255), 2)
+
                     cv2.imshow("CONAN", frame_with_deeplab)
                 else:
-                    cv2.imshow("CONAN", frame)
+                    cv2.imshow("CONAN", frame_display)
+    
             curr_time = time.time()
             print("FPS: {:.2f}".format(fps.fps()))
-
+            
             if cv2.waitKey(1) == ord('q'):
                 break
+
+if not args.camera:
+    cap.release()            
