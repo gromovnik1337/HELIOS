@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def distanceBetweenKeypoints(kpt_1: list, kpt_2: list)-> float:
     """Compute the euclidean distance between two keypoints
 
@@ -18,6 +19,14 @@ def distanceBetweenKeypoints(kpt_1: list, kpt_2: list)-> float:
     vect = (u, v)
     return np.linalg.norm(vect)
 
+def KeypointLocation(Kpt: list):
+    if Kpt ==[]:
+        return -1
+    
+    u=Kpt[0]
+    v=Kpt[1]
+    Place=(u,v)
+    return Place
 
 def getAngleDefinedByABC(d_b_a: float, d_c_a: float, d_b_c: float) -> float:
     """ Compute the angle theta on the triangle defined by three points A-B-C
@@ -43,6 +52,8 @@ def getAngleDefinedByABC(d_b_a: float, d_c_a: float, d_b_c: float) -> float:
         return -1
     theta = np.arccos((d_b_a * d_b_a + d_b_c * d_b_c - d_c_a * d_c_a) / (2 * d_b_a * d_b_c))
     return theta * 180 / np.pi
+
+
 
 
 def toDicitonary(keypoints: list)->dict:
@@ -86,5 +97,20 @@ def getKeypointsData(keypoints):
     keypoints_data.update({'theta_le':getAngleDefinedByABC(keypoints_data['d_le_lw'], keypoints_data['d_ls_lw'], keypoints_data['d_le_ls'])})
     # Angle right elbow 
     keypoints_data.update({'theta_re':getAngleDefinedByABC(keypoints_data['d_re_rw'], keypoints_data['d_rs_rw'], keypoints_data['d_re_rs'])})
-
+    # Compute the distance from the left hipp to the center of torso
+    keypoints_data.update({'d_lh_ct': distanceBetweenKeypoints(keypoints_data['K_11'], keypoints_data['K_1'])})
+    # Compute the distance from the right hipp to the center of torso
+    keypoints_data.update({'d_rh_ct':distanceBetweenKeypoints(keypoints_data['K_8'], keypoints_data['K_1'])})
+    # Compute the distance from the right hipp to the right ankle
+    keypoints_data.update({'d_rh_ra':distanceBetweenKeypoints(keypoints_data['K_8'],keypoints_data['K_10'])})
+    # Compute the distance from the left hipp to the left ankle
+    keypoints_data.update({'d_lh_la':distanceBetweenKeypoints(keypoints_data['K_11'],keypoints_data['K_13'])})
+    # Compute the distance from the left center of torso to the left ankle
+    keypoints_data.update({'d_ct_la':distanceBetweenKeypoints(keypoints_data['K_1'],keypoints_data['K_13'])})
+    # Compute the distance from the right center of torso to the right ankle
+    keypoints_data.update({'d_ct_ra':distanceBetweenKeypoints(keypoints_data['K_1'],keypoints_data['K_10'])})
+    # Angle left hipp
+    keypoints_data.update({'theta_lh':getAngleDefinedByABC(keypoints_data['d_lh_la'], keypoints_data['d_ct_la'], keypoints_data['d_lh_ct'])})
+    # Angle right hipp 
+    keypoints_data.update({'theta_rh':getAngleDefinedByABC(keypoints_data['d_rh_ra'], keypoints_data['d_ct_ra'], keypoints_data['d_rh_ct'])})
     return keypoints_data
