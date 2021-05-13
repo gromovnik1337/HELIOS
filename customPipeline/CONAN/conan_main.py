@@ -142,19 +142,33 @@ keypoints_list = None
 detected_keypoints = None
 personwiseKeypoints = None
 
-#Begining number of push-ups
-PUSHUP_COUNTER_ON = False
+# Push up counting parameters
+PUSHUP_COUNTER_ON = True
 
 n=0
-Uperpoint=None #initial uperpoint value
-Lowerpoint=None #initial lowerpoint value
-PushupStance=None #initial pushapstance value
-CountingNoKeypoint=0 
-Tc0=0 #initializin the trace of center of torso height
-Tc1=0
-Tc2=0
-Lowering=None #initializing the rising/lowering
-Pushup=0
+Uperpoint = None # Initial uper point value
+Lowerpoint = None # Initial lower point value
+PushupStance = None # Initial pushapstance value
+CountingNoKeypoint = 0 
+Tc0 = 0 # Initializing the trace of center of torso height
+Tc1 = 0
+Tc2 = 0
+Lowering = None # Initializing the rising/lowering
+Pushup = 0
+
+rwristv = 0
+lwristv = 0
+ranklev = 0 
+lanklev = 0
+centoru = 0
+centorv = 0
+headu = 0
+ranklev = 0
+lshoulv = 0
+relbv = 0
+lelbv = 0
+thetae = 0
+thetah = 0
 
 # ROI parameters
 ROI_on = False
@@ -227,7 +241,7 @@ with dai.Device(pipeline) as device:
 
         if frame is not None:    
             passed_time = int(curr_time - start_time)
-            print("Time passed: ", passed_time)
+           #print("Time passed: ", passed_time)
 
             if passed_time < stop_deeplab:
                 
@@ -382,128 +396,118 @@ with dai.Device(pipeline) as device:
                     if PUSHUP_COUNTER_ON == True:
 
                         # Keypoints of right wrist
-                        if k_data['K_4']==[]:
-                            rwristv=0
+                        if k_data['K_4'] == []:
+                            rwristv = rwristv
                         else:
-                            rwristv=k_data['K_4'][1]
+                            rwristv = k_data['K_4'][1]
 
                         # Keypoints of left wrist
-                        if k_data['K_7']==[]:
-                            lwristv=0
+                        if k_data['K_7'] == []:
+                            lwristv = lwristv
                         else:
-                            lwristv=k_data['K_7'][1]
+                            lwristv = k_data['K_7'][1]
 
                         # Keypoints of right ankle
-                        if k_data['K_10']==[]:    
-                            ranklev=0
+                        if k_data['K_10'] == []:    
+                            ranklev = ranklev
                         else:
-                            ranklev=k_data['K_10'][1]
+                            ranklev = k_data['K_10'][1]
 
                         # Keypoints of left ankle
-                        if k_data['K_13']==[]:
-                            lanklev=0
+                        if k_data['K_13'] == []:
+                            lanklev = lanklev
                         else:
-                            lanklev=k_data['K_13'][1]
+                            lanklev = k_data['K_13'][1]
 
                         # Keypoints of center of torso
-                        if k_data['K_1']==[]:
-                            centoru=0
-                            centorv=0
+                        if k_data['K_1'] == []:
+                            centoru = centoru
+                            centorv = centorv
                         else:
-                            centoru=k_data['K_1'][0]
-                            centorv=k_data['K_1'][1]
+                            centoru = k_data['K_1'][0]
+                            centorv = k_data['K_1'][1]
 
                         # Keypoints of head
-                        if k_data['K_0']==[]:
-                            headu=0
+                        if k_data['K_0'] == []:
+                            headu = headu
                         else:
-                            headu=k_data['K_0'][0]
+                            headu = k_data['K_0'][0]
                         
                         # Keypoints of right shoulder
-                        if k_data['K_2']==[]:
-                            ranklev=0
+                        if k_data['K_2'] == []:
+                            ranklev = ranklev
                         else:
-                            rshoulv=k_data['K_2'][1]
+                            rshoulv = k_data['K_2'][1]
 
                         # Keypoints of left shoulder
-                        if k_data['K_5']==[]:
-                            lshoulv=0
+                        if k_data['K_5'] == []:
+                            lshoulv = lshoulv
                         else:
-                            lshoulv=k_data['K_5'][1]
+                            lshoulv = k_data['K_5'][1]
                         
                         # Keypoints of right elbow
-                        if k_data['K_3']==[]:
-                            relbv=0
+                        if k_data['K_3'] == []:
+                            relbv = relbv
                         else:
-                            relbv=k_data['K_3'][1]
+                            relbv = k_data['K_3'][1]
 
                         # Keypoints of left elbow
-                        if k_data['K_6']==[]:
-                            lelbv=0
+                        if k_data['K_6'] == []:
+                            lelbv = lelbv
                         else:
-                            lelbv=k_data['K_6'][1]
+                            lelbv = k_data['K_6'][1]
 
                         #determining the position of the person
-                        if headu<centoru: #person has legs on the right side and head on the left
-                            wristv=lwristv
-                            wristu=lwrustu
-                            anklev=lanklev
-                            ankleu=lankleu
-                            shoulu=lshoulu
-                            shoulv=lshoulv
-                            elbu=lelbu
-                            elbv=lelbv
-                            thetae=theta_le
-                            thetah=theta_lh
-                        elif headu>centoru: #person has legs on the left side and head on the right
-                            wristv=rwristv
-                            wristu=rwrustu
-                            anklev=ranklev
-                            ankleu=rankleu
-                            shoulu=rshoulu
-                            shoulv=rshoulv
-                            elbv=relbv
-                            thetae=theta_re
-                            thetah=theta_rh
-                        else:
-                            print('Your head is out of the frame')
+                        #if headu<centoru: #person has legs on the right side and head on the left - for now not working
+                        wristv = lwristv
+                        anklev = lanklev
+                        shoulv = lshoulv
+                        elbv = lelbv
+                        thetae = k_data['theta_le']
+                        thetah = k_data['theta_lh']
+                        #elif headu > centoru: #person has legs on the left side and head on the right - for now not working
+                        #    wristv = rwristv
+                        #    anklev = ranklev
+                        #    shoulv = rshoulv
+                        #    elbv = relbv
+                        #    thetae = k_data['theta_re']
+                        #    thetah = k_data['theta_rh']
                         
-                        #Entry in upper Push-up stance - The entry point in the uper position is that the wrist needs to be equal or below the ankles
-                        if wristv<=anklev:
-                            PushupStance=True
-                            CountingNoKeypoint=0
+                        #Entry in upper Push-up stance - The entry point in the upper position is that the wrist needs to be equal or below the ankles
+                        if wristv <= anklev:
+                            PushupStance = True
+                            CountingNoKeypoint = 0
                         else:
-                            CountingNoKeypoint=CountingNoKeypoint+1
+                            CountingNoKeypoint = CountingNoKeypoint+1
 
                         #Since we are sometimes loosing the points of interest this is a buffer zone that the Pushupstance doesnt automaticly go in False 
-                        if CountingNoKeypoint>10:
-                            PushupStance=False
-                        else:
-                            break
+                        #if CountingNoKeypoint > 10: - for now not working
+                        #    PushupStance = False
 
 
-                        if PushupStance==True and (thetah>170 and thetah<190):    #checking the legs and back            
-                            if thetae<190 and thetae>170: #checking the hands if they are straight
-                                Uperpoint=True
+                        if PushupStance == True and not ( thetah > 170 and thetah < 190 ):    #checking the legs and back - for now not working            
+                            if thetae < 190 and thetae > 170: #checking the hands if they are straight
+                                Uperpoint = True
                             else:
-                                Uperpoint=False
+                                Uperpoint = False
                             
-                            if elbv>shoulv:
-                                Lowerpoint=True
+                            if thetae < 120: #shoulder height < elbow height  - for now not working
+                                Lowerpoint = True
                             else:
-                                Lowerpoint=False
+                                Lowerpoint = False
                         else:
                             print('Your back is bent, please correct it.') 
-                        
-                        Tc0=centorv
-                        Tc1=Tc0
-                        Tc2=Tc1
 
-                        if (Tc0<Tc1 and Tc1<Tc2) and Lowerpoint==True:
-                            Lowering=True
-                        elif (Tc1<Tc0 and Tc2<Tc1) and Uperpoint==True and Lowering==True:
+                        #Tc2 = Tc1 and Tc1 < Tc2 and Tc2 < Tc1 c0 < Tc1 and Tc1 < Tc0 and - for now not working
+                        #Tc1 = Tc0
+                        #Tc0 = shoulv
+                        #print(k_data) - for now not working
+                        
+                        if Lowerpoint == True:
+                            Lowering = True
+                        elif Uperpoint == True and Lowering == True:
                             Pushup = Pushup + 1
-                            Print('Number of Push-ups:', Pushup)
+                            print('Number of Push-ups:', Pushup)
                             Lowering=False
                     
                     #---------------------------------------------------------------
@@ -540,7 +544,7 @@ with dai.Device(pipeline) as device:
                     cv2.imshow("CONAN", frame_display)
     
             curr_time = time.time()
-            print("FPS: {:.2f}".format(fps.fps()))
+            #print("FPS: {:.2f}".format(fps.fps()))
             
             if cv2.waitKey(1) == ord('q'):
                 break
