@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from numpy.core.numeric import True_
 from conan_utils_pose import *
 from conan_utils_seg import *
 from conan_utils_gen import *
@@ -12,6 +13,8 @@ import threading
 import time
 import cv2
 import argparse
+import skimage
+from skimage import measure
 
 from pathlib import Path
 
@@ -171,9 +174,9 @@ thetae = 0
 thetah = 0
 
 # ROI parameters
-ROI_on = False
+ROI_on = True
 
-prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = 0, 0, 0, 0
+prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb, prev_ph, prev_pw= 10, 10, 10, 10 ,10, 10
 x_bb, y_bb, w_bb, h_bb = 0, 0, 513, 513
 
 # Frame that is to be sent inside XLink to perform inference
@@ -212,7 +215,7 @@ with dai.Device(pipeline) as device:
 
     start_time = time.time()
     curr_time = time.time()
-    stop_deeplab = 45 # Lock-on time
+    stop_deeplab = 10 # Lock-on time
     deeplab_on = False # Needed because the lock-on time can still be ticking but the inference data still hasn't come
 
     # It takes time for the camera to start or to receive video frames
@@ -290,27 +293,50 @@ with dai.Device(pipeline) as device:
                     frame_seg_human = segment_human(layer_1)                  
                     frame_seg_human = cv2.bitwise_and(frame_seg, frame_seg, mask = frame_seg_human)
                     frame_seg_human_gray = cv2.cvtColor(frame_seg_human, cv2.COLOR_BGR2GRAY)
-                    prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = x_bb,y_bb, w_bb, h_bb
+                    # prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb = x_bb,y_bb, w_bb, h_bb
                     lb_mk_thres_1= cv2.threshold(frame_seg_human_gray,1,255,cv2.THRESH_BINARY)[1]
-                    lb_mk_eroded = cv2.erode(frame_seg_human_gray, None, iterations = 3)
+                    lb_mk_eroded = cv2.erode(lb_mk_thres_1, None, iterations = 3)
                     lb_mk_dilated = cv2.dilate(lb_mk_eroded,None, iterations = 3)
-        
-                    segmented_object_filtered_contours= cv2.findContours(lb_mk_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
-                    x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(segmented_object_filtered_contours[0])
-                    if w_bb < 20 or h_bb < 20:
+                    # cv2.imshow("thres",lb_mk_dilated)
+                    frame_seg_human_labeled = measure.label(lb_mk_dilated)
+                    regions = measure.regionprops(frame_seg_human_labeled)
+                    regions.sort(key=lambda x: x.area, reverse=True)
+                    if len(regions) > 1:
+                        for rg in regions[1:]:
+                            frame_seg_human_labeled[rg.coords[:,0], rg.coords[:,1]] = 0
+                    one_blob_mask = frame_seg_human_labeled > 0
+                    frame_seg_human_filtered = np.zeros_like(frame_seg_human_gray, dtype=np.uint8)
+                    frame_seg_human_filtered[one_blob_mask] = frame_seg_human_gray[one_blob_mask]
+                    # cv2.imshow("MASK",frame_seg_human_filtered)
+                    ret, lb_mk_thres_2= cv2.threshold(frame_seg_human_filtered,12,255,cv2.THRESH_BINARY)
+
+                    frame_seg_human_filtered_contours= cv2.findContours(lb_mk_thres_2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]
+                    if len(frame_seg_human_filtered_contours) > 0:
+                        x_bb, y_bb, w_bb, h_bb = cv2.boundingRect(frame_seg_human_filtered_contours[0])
+                    if w_bb < 50 or h_bb < 50:
                         x_bb, y_bb, w_bb, h_bb = prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb
                     bb_mask_template = np.zeros_like(frame_seg_vis_gray, dtype=np.uint8)
                     cv2.imshow("ROI",frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb])
+                    cv2.imshow("feed",frame_seg_human)
                     bb_mask_template[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb] = frame_seg_vis_gray[y_bb:y_bb+h_bb,x_bb:x_bb+w_bb]
-                    bb_mask= cv2.threshold(bb_mask_template,0,255,cv2.THRESH_BINARY)[1]
+                    bb_mask= cv2.threshold(bb_mask_template,1,255,cv2.THRESH_BINARY)[1]
                     bb_mask_bool = bb_mask > 10
                     frame_seg_bb = np.zeros_like(frame_seg_vis, dtype=np.uint8)
-                    frame_seg_bb[bb_mask_bool] = frame_seg_vis[bb_mask_bool]
-                    padding_width = int(w_bb//10)
-                    padding_height = int(h_bb//10)
-                    print(np.shape(frame_seg_human))
-                    print(x_bb, y_bb, w_bb, h_bb)
-                    cv2.imshow("Segmented human", frame_seg_human)
+                    pw = int(w_bb//10)
+                    ph = int(h_bb//10)
+                    print("now : ", w_bb, h_bb)
+                    print("prev: ", prev_w_bb, prev_h_bb)
+                    # frame_seg_bb[y_bb-ph:y_bb+h_bb+ph,x_bb-pw:x_bb+w_bb+pw] = frame_seg_vis[y_bb-ph:y_bb+h_bb+ph,x_bb-pw:x_bb+w_bb+pw]
+                    if w_bb*h_bb > prev_w_bb*prev_h_bb:
+                        frame_seg_bb[y_bb-ph:y_bb+h_bb+ph,x_bb-pw:x_bb+w_bb+pw] = frame_seg_vis[y_bb-ph:y_bb+h_bb+ph,x_bb-pw:x_bb+w_bb+pw]
+                        prev_x_bb, prev_y_bb, prev_w_bb, prev_h_bb, prev_ph, prev_pw = x_bb,y_bb, w_bb, h_bb, ph, pw
+                    else:
+                        frame_seg_bb[prev_y_bb-prev_ph:prev_y_bb+prev_h_bb+prev_ph,prev_x_bb-prev_pw:prev_x_bb+prev_w_bb+prev_pw] = frame_seg_vis[prev_y_bb-prev_ph:prev_y_bb+prev_h_bb+prev_ph,prev_x_bb-prev_pw:prev_x_bb+prev_w_bb+prev_pw]
+                    # print(np.shape(frame_seg_bb))
+                    
+                    cv2.imshow("Segmented human", frame_seg_bb)
+                    
+                    frame_seg_human=frame_seg_bb
 
                 else:
                     # Segmented human code without ROI commented out, Stipe & Vice, 06.5.2021
